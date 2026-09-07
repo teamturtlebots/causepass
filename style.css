@@ -1,0 +1,130 @@
+:root {
+  --navy: #1F3A5F;
+  --navy-dark: #152A45;
+  --green: #2E8B4F;
+  --green-dark: #1F6538;
+  --cream: #FAF8F3;
+  --ink: #25291F;
+  --muted: #6B7061;
+  --line: #E4E1D6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+#app { min-height: 100vh; }
+
+h1, h2, h3, .display {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 700;
+  margin: 0;
+}
+
+button {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--navy);
+}
+button.primary {
+  background: var(--green);
+  color: #fff;
+  border: none;
+}
+button.danger { color: #791F1F; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+input, select {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: #fff;
+  margin-bottom: 16px;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.badge.green { color: var(--green-dark); background: #E9F5EE; }
+.badge.grey { color: #5F5E5A; background: #F1EFE8; }
+.badge.red { color: #791F1F; background: #FCEBEB; }
+.badge.amber { color: #7A4E06; background: #FAEEDA; }
+
+.banner {
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.toast {
+  background: var(--navy-dark);
+  color: #fff;
+  font-size: 13px;
+  padding: 8px;
+  text-align: center;
+}
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
+.tabs button { background: none; border: none; border-radius: 0; border-bottom: 2px solid transparent; padding: 10px 14px; color: var(--muted); white-space: nowrap; }
+.tabs button.active { color: var(--navy); border-bottom-color: var(--green); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; }
+.stat-card { background: #F4F2EA; border-radius: 10px; padding: 1rem; }
+.stat-card .label { font-size: 12px; color: var(--muted); }
+.stat-card .value { font-size: 24px; font-weight: 700; font-family: 'Fraunces', serif; margin-top: 4px; }
+
+.offer-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: #fff; margin-bottom: 10px; }
+.offer-card.redeemed { opacity: 0.7; }
+.offer-row { display: flex; justify-content: space-between; align-items: flex-start; }
+.offer-left { display: flex; gap: 10px; align-items: center; }
+.avatar { width: 36px; height: 36px; border-radius: 9px; background: #E9F5EE; color: var(--green-dark); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+
+.pass-hero { background: var(--navy); border-radius: 16px; padding: 16px 18px; margin-bottom: 18px; color: #fff; }
+.progress-bar { height: 6px; background: rgba(255,255,255,0.16); border-radius: 4px; margin-top: 6px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--green); border-radius: 4px; transition: width .3s; }
+
+.modal-backdrop { margin-top: 16px; max-width: 380px; margin-left: auto; margin-right: auto; }
+.modal { border-radius: 18px; padding: 18px; background: #fff; border: 1px solid var(--line); text-align: center; }
+.modal.dark { background: #173404; border: none; color: #fff; }
+
+.customer-wrap { display: flex; justify-content: center; padding: 1.5rem 1rem; }
+.customer-inner { width: 100%; max-width: 380px; }
+
+.centered { padding: 3rem 1rem; text-align: center; color: var(--muted); }
+.admin-wrap { max-width: 880px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+.admin-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+
+.login-wrap { max-width: 320px; margin: 4rem auto; padding: 0 1rem; }
+.login-wrap input { width: 100%; margin-bottom: 10px; }
+.login-wrap button { width: 100%; }
+
+.row-flex { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.list-item { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+.list-box { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.mono { font-family: monospace; font-size: 12px; color: var(--navy); }

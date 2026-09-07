@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Only a single, non-enumerable field (redeemedCount) may be bumped by
+    // exactly 1 without being an admin — this is what lets the customer-side
+    // redemption transaction work with no login, while blocking anyone from
+    // editing anything else on the pass (status, customerName, etc.).
+    function isValidRedemptionIncrement() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['redeemedCount'])
+        && request.resource.data.redeemedCount == resource.data.redeemedCount + 1;
+    }
+
+    match /organizations/{orgId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /programs/{programId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /merchants/{merchantId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /offers/{offerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /passes/{passToken} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isValidRedemptionIncrement();
+    }
+
+    // The core one-time-redemption guarantee: a redemption document's ID is
+    // "{passToken}_{offerId}", so the SAME combination can only ever be
+    // created once — Firestore itself refuses a second create at that ID,
+    // even for two simultaneous requests. No server code required.
+    match /redemptions/{redemptionId} {
+      allow read: if true;
+      allow create: if !exists(/databases/$(database)/documents/redemptions/$(redemptionId))
+        && redemptionId == (request.resource.data.passToken + '_' + request.resource.data.offerId);
+      allow update, delete: if false;
+    }
+
+    match /admins/{uid} {
+      allow read: if request.auth != null;
+      allow write: if false; // manage this collection from the console only
+    }
+  }
+}
