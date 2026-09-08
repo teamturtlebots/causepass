@@ -217,7 +217,9 @@ const AdminView = (function () {
   function renderPassesTab() {
     const link = state.lastLink ? window.location.origin + window.location.pathname + "#/p/" + state.lastLink : null;
     const search = (state.passSearch || "").toLowerCase();
-    const filtered = state.passes.filter((p) => !search || p.customerName.toLowerCase().includes(search) || p.id.toLowerCase().includes(search));
+    const filtered = state.passes
+      .filter((p) => !search || p.customerName.toLowerCase().includes(search) || p.id.toLowerCase().includes(search))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // newest first
 
     const rows = filtered.map((p) => {
       const program = state.programs.find((pr) => pr.id === p.programId);
@@ -227,7 +229,7 @@ const AdminView = (function () {
         <div class="list-item">
           <div style="min-width:140px;">
             <div style="font-weight:600;">${escapeHtml(p.customerName)}</div>
-            <div style="font-size:12px; color:var(--muted);">${escapeHtml(program && program.name)}</div>
+            <div style="font-size:12px; color:var(--muted);">${escapeHtml(program && program.name)} · ${fmtDate(p.createdAt)}</div>
           </div>
           <div class="mono">${passLink}</div>
           <div>${used}${program && program.maxRedemptions ? ` / ${program.maxRedemptions}` : ""} redeemed</div>

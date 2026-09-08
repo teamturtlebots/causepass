@@ -68,7 +68,9 @@ const CustomerView = (function () {
         .where("programId", "==", programId)
         .where("active", "==", true)
         .onSnapshot((snap) => {
-          state.offers = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          state.offers = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((o) => !o.archived); // archived offers stay out of the customer view even if still "active"
           const merchantIds = [...new Set(state.offers.map((o) => o.merchantId))];
           Promise.all(merchantIds.map((id) =>
             db.collection("merchants").doc(id).get().then((mSnap) => [id, mSnap.exists ? mSnap.data() : { name: "Unknown" }])
