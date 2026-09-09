@@ -37,3 +37,9 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 window.addEventListener("hashchange", route);
+
+// Run once immediately on load — otherwise a customer opening a #/p/TOKEN link
+// would sit waiting on an admin auth check that has nothing to do with them,
+// before the router ever looks at the URL. The auth listener above still
+// re-routes once it resolves, for the admin path.
+route();
