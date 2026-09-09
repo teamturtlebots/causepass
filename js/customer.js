@@ -33,7 +33,7 @@ const CustomerView = (function () {
 
     tickTimer = setInterval(() => {
       state.now = Date.now();
-      if (state.liveOffer) render(); // only need to re-render every second while the countdown is showing
+      updateLiveCountdown(); // updates just the countdown text, not the whole modal — typing in the amount field stays intact
     }, 1000);
 
     const passUnsub = db.collection("passes").doc(token).onSnapshot((snap) => {
@@ -145,6 +145,7 @@ const CustomerView = (function () {
       });
       state.liveOffer = { offer, ts: result.ts, alreadyRedeemed: result.alreadyRedeemed };
       state.confirmOffer = null;
+      state.amountSavedDraft = "";
     } catch (e) {
       state.error = e.message || "Couldn't redeem this offer.";
       state.confirmOffer = null;
@@ -273,6 +274,20 @@ const CustomerView = (function () {
     render();
   }
 
+  function updateLiveCountdown() {
+    if (!state.liveOffer) return;
+    const el = document.getElementById("live-timer-chip");
+    if (!el) return; // modal isn't open right now, nothing to update
+    const lo = state.liveOffer;
+    const remaining = Math.max(0, 300000 - (state.now - lo.ts));
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    const live = remaining > 0 && !lo.alreadyRedeemed;
+    el.outerHTML = live
+      ? `<div id="live-timer-chip" style="font-size:11px; background:rgba(255,255,255,0.1); display:inline-block; padding:5px 12px; border-radius:20px;">Live verification · ${mins}:${String(secs).padStart(2, "0")} remaining</div>`
+      : `<div id="live-timer-chip" style="font-size:11px; color:#97C459;">Live window closed</div>`;
+  }
+
   function renderLiveValidation() {
     const lo = state.liveOffer;
     const merchant = state.merchants[lo.offer.merchantId];
@@ -293,17 +308,17 @@ const CustomerView = (function () {
           <div style="font-size:13px; color:#C0DD97;">${escapeHtml(lo.offer.terms)}</div>
           <div style="font-size:12px; color:#97C459; margin-bottom:16px;">${fmtDate(lo.ts)}</div>
           ${live
-            ? `<div style="font-size:11px; background:rgba(255,255,255,0.1); display:inline-block; padding:5px 12px; border-radius:20px;">Live verification · ${mins}:${String(secs).padStart(2, "0")} remaining</div>`
-            : `<div style="font-size:11px; color:#97C459;">Live window closed</div>`
+            ? `<div id="live-timer-chip" style="font-size:11px; background:rgba(255,255,255,0.1); display:inline-block; padding:5px 12px; border-radius:20px;">Live verification · ${mins}:${String(secs).padStart(2, "0")} remaining</div>`
+            : `<div id="live-timer-chip" style="font-size:11px; color:#97C459;">Live window closed</div>`
           }
 
           <div style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.14);">
             ${amountSaved != null
               ? `<div style="font-size:14px; color:#8FE0AA; font-weight:700;">You saved $${amountSaved.toFixed(2)}</div>`
               : `
-                <div style="font-size:12px; color:#C0DD97; margin-bottom:8px;">How much did you save?</div>
+                <div style="font-size:12px; color:#C0DD97; margin-bottom:8px;">How much did you spend?</div>
                 <div class="row-flex" style="justify-content:center;">
-                  <input type="number" step="0.01" min="0" id="amount-saved-input" placeholder="$" style="width:100px;" />
+                  <input type="number" step="0.01" min="0" id="amount-saved-input" placeholder="$" value="${escapeHtml(state.amountSavedDraft || "")}" style="width:100px;" />
                   <button class="primary" data-action="submit-amount" data-offer-id="${lo.offer.id}">Save</button>
                 </div>
                 ${state.amountSavedError ? `<div style="font-size:12px; color:#F4A9A9; margin-top:6px;">${escapeHtml(state.amountSavedError)}</div>` : ""}
@@ -317,8 +332,8 @@ const CustomerView = (function () {
   }
 
   function renderSavedAmount() {
+    if (state.redemptions.length === 0) return "";
     const withAmount = state.redemptions.filter((r) => r.amountSaved != null);
-    if (withAmount.length === 0) return "";
     const total = withAmount.reduce((sum, r) => sum + r.amountSaved, 0);
     const hasUnentered = state.redemptions.length > withAmount.length;
     return `
@@ -368,6 +383,7 @@ const CustomerView = (function () {
         const offer = state.offers.find((o) => o.id === offerId) || getOfferInfo(offerId);
         const redemption = state.redemptions.find((r) => r.offerId === offerId);
         state.liveOffer = { offer, ts: redemption.timestamp, alreadyRedeemed: true };
+        state.amountSavedDraft = "";
         render();
       });
     });
@@ -382,6 +398,8 @@ const CustomerView = (function () {
       const val = document.getElementById("amount-saved-input").value;
       submitAmountSaved(submitAmountBtn.dataset.offerId, val);
     });
+    const amountInput = app.querySelector("#amount-saved-input");
+    if (amountInput) amountInput.addEventListener("input", () => { state.amountSavedDraft = amountInput.value; });
   }
 
   return { init };
