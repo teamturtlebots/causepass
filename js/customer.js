@@ -22,6 +22,7 @@ const CustomerView = (function () {
       confirmOffer: null,
       liveOffer: null,
       error: "",
+      amountSavedError: "",
       now: Date.now(),
     };
   }
@@ -192,7 +193,13 @@ const CustomerView = (function () {
             <span class="badge ${redeemed ? "grey" : "green"}">${redeemed ? "Redeemed" : "Available"}</span>
           </div>
           ${redeemed
-            ? `<div style="font-size:11px; color:var(--muted); margin-top:8px;">✓ ${fmtDate(redemption.timestamp)}</div>`
+            ? `<div style="font-size:11px; color:var(--muted); margin-top:8px;">
+                 ✓ ${fmtDate(redemption.timestamp)}${redemption.amountSaved != null ? ` · $${redemption.amountSaved.toFixed(2)} saved` : ""}
+               </div>
+               ${redemption.amountSaved == null
+                 ? `<button style="margin-top:8px; font-size:12px; padding:6px 10px;" data-action="reopen-amount" data-offer-id="${offer.id}">Add how much you saved</button>`
+                 : ""
+               }`
             : `<button class="primary" style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">Redeem this offer</button>`
           }
         </div>`;
@@ -215,6 +222,7 @@ const CustomerView = (function () {
             ` : `
               <div style="font-size:12px; color:#9DBBDD; margin-top:10px;">${used} offer${used === 1 ? "" : "s"} redeemed</div>
             `}
+            ${renderSavedAmount()}
           </div>
 
           ${expired ? `<div class="banner red">This pass's campaign has expired.</div>` : ""}
@@ -248,6 +256,23 @@ const CustomerView = (function () {
     wireEvents();
   }
 
+  async function submitAmountSaved(offerId, value) {
+    const amount = parseFloat(value);
+    if (isNaN(amount) || amount < 0) {
+      state.amountSavedError = "Enter a valid amount.";
+      render();
+      return;
+    }
+    const redemptionId = `${state.token}_${offerId}`;
+    try {
+      await db.collection("redemptions").doc(redemptionId).update({ amountSaved: amount });
+      state.amountSavedError = "";
+    } catch (e) {
+      state.amountSavedError = "Couldn't save that — try again.";
+    }
+    render();
+  }
+
   function renderLiveValidation() {
     const lo = state.liveOffer;
     const merchant = state.merchants[lo.offer.merchantId];
@@ -255,6 +280,9 @@ const CustomerView = (function () {
     const mins = Math.floor(remaining / 60000);
     const secs = Math.floor((remaining % 60000) / 1000);
     const live = remaining > 0 && !lo.alreadyRedeemed;
+    const redemption = state.redemptions.find((r) => r.offerId === lo.offer.id);
+    const amountSaved = redemption && redemption.amountSaved;
+
     return `
       <div class="modal-backdrop">
         <div class="modal dark">
@@ -268,8 +296,35 @@ const CustomerView = (function () {
             ? `<div style="font-size:11px; background:rgba(255,255,255,0.1); display:inline-block; padding:5px 12px; border-radius:20px;">Live verification · ${mins}:${String(secs).padStart(2, "0")} remaining</div>`
             : `<div style="font-size:11px; color:#97C459;">Live window closed</div>`
           }
+
+          <div style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.14);">
+            ${amountSaved != null
+              ? `<div style="font-size:14px; color:#8FE0AA; font-weight:700;">You saved $${amountSaved.toFixed(2)}</div>`
+              : `
+                <div style="font-size:12px; color:#C0DD97; margin-bottom:8px;">How much did you save?</div>
+                <div class="row-flex" style="justify-content:center;">
+                  <input type="number" step="0.01" min="0" id="amount-saved-input" placeholder="$" style="width:100px;" />
+                  <button class="primary" data-action="submit-amount" data-offer-id="${lo.offer.id}">Save</button>
+                </div>
+                ${state.amountSavedError ? `<div style="font-size:12px; color:#F4A9A9; margin-top:6px;">${escapeHtml(state.amountSavedError)}</div>` : ""}
+              `
+            }
+          </div>
+
           <div style="margin-top:16px;"><button data-action="close-live">Close</button></div>
         </div>
+      </div>`;
+  }
+
+  function renderSavedAmount() {
+    const withAmount = state.redemptions.filter((r) => r.amountSaved != null);
+    if (withAmount.length === 0) return "";
+    const total = withAmount.reduce((sum, r) => sum + r.amountSaved, 0);
+    const hasUnentered = state.redemptions.length > withAmount.length;
+    return `
+      <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.14);">
+        <div style="font-size:11px; color:#9DBBDD;">You've saved</div>
+        <div style="font-size:20px; font-weight:700; color:#8FE0AA;">$${total.toFixed(2)}${hasUnentered ? "+" : ""}</div>
       </div>`;
   }
 
@@ -285,7 +340,10 @@ const CustomerView = (function () {
             <div style="font-size:13px; font-weight:600;">${escapeHtml(merchant ? merchant.name : "Unknown merchant")}</div>
             <div style="font-size:12px; color:var(--muted);">${escapeHtml(offer ? offer.terms : "")}</div>
           </div>
-          <div style="font-size:11px; color:var(--muted); text-align:right;">✓ ${fmtDate(r.timestamp)}</div>
+          <div style="font-size:11px; color:var(--muted); text-align:right;">
+            ✓ ${fmtDate(r.timestamp)}
+            ${r.amountSaved != null ? `<div style="color:#8FE0AA; font-weight:600;">$${r.amountSaved.toFixed(2)} saved</div>` : ""}
+          </div>
         </div>`;
     }).join("");
 
@@ -304,12 +362,26 @@ const CustomerView = (function () {
         render();
       });
     });
+    app.querySelectorAll('[data-action="reopen-amount"]').forEach((el) => {
+      el.addEventListener("click", () => {
+        const offerId = el.dataset.offerId;
+        const offer = state.offers.find((o) => o.id === offerId) || getOfferInfo(offerId);
+        const redemption = state.redemptions.find((r) => r.offerId === offerId);
+        state.liveOffer = { offer, ts: redemption.timestamp, alreadyRedeemed: true };
+        render();
+      });
+    });
     const cancelBtn = app.querySelector('[data-action="cancel-confirm"]');
     if (cancelBtn) cancelBtn.addEventListener("click", () => { state.confirmOffer = null; render(); });
     const doRedeemBtn = app.querySelector('[data-action="do-redeem"]');
     if (doRedeemBtn) doRedeemBtn.addEventListener("click", () => attemptRedeem(state.confirmOffer.id));
     const closeLiveBtn = app.querySelector('[data-action="close-live"]');
-    if (closeLiveBtn) closeLiveBtn.addEventListener("click", () => { state.liveOffer = null; render(); });
+    if (closeLiveBtn) closeLiveBtn.addEventListener("click", () => { state.liveOffer = null; state.amountSavedError = ""; render(); });
+    const submitAmountBtn = app.querySelector('[data-action="submit-amount"]');
+    if (submitAmountBtn) submitAmountBtn.addEventListener("click", () => {
+      const val = document.getElementById("amount-saved-input").value;
+      submitAmountSaved(submitAmountBtn.dataset.offerId, val);
+    });
   }
 
   return { init };
