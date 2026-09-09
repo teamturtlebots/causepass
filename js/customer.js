@@ -17,6 +17,7 @@ const CustomerView = (function () {
       org: null,
       offers: [],
       merchants: {},
+      offerDetails: {}, // cache for offers referenced by past redemptions but no longer in the active offers list (e.g. archived since)
       redemptions: [],
       confirmOffer: null,
       liveOffer: null,
@@ -49,9 +50,37 @@ const CustomerView = (function () {
     const redemptionsUnsub = db.collection("redemptions").where("passToken", "==", token)
       .onSnapshot((snap) => {
         state.redemptions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        ensureHistoryDetails();
         render();
       });
     unsubscribers.push(redemptionsUnsub);
+  }
+
+  // Makes sure every redemption in the history has a merchant name + offer terms to show,
+  // even if that offer has since been deactivated or archived (and so dropped out of state.offers).
+  function ensureHistoryDetails() {
+    const missing = state.redemptions
+      .map((r) => r.offerId)
+      .filter((offerId) => !state.offers.some((o) => o.id === offerId) && !state.offerDetails[offerId]);
+    const uniqueMissing = [...new Set(missing)];
+    if (uniqueMissing.length === 0) return;
+
+    Promise.all(uniqueMissing.map((offerId) =>
+      db.collection("offers").doc(offerId).get().then((snap) => {
+        if (!snap.exists) return null;
+        const offerData = { id: snap.id, ...snap.data() };
+        state.offerDetails[offerId] = offerData;
+        if (!state.merchants[offerData.merchantId]) {
+          return db.collection("merchants").doc(offerData.merchantId).get().then((mSnap) => {
+            state.merchants[offerData.merchantId] = mSnap.exists ? mSnap.data() : { name: "Unknown merchant" };
+          });
+        }
+      })
+    )).then(() => render());
+  }
+
+  function getOfferInfo(offerId) {
+    return state.offers.find((o) => o.id === offerId) || state.offerDetails[offerId] || null;
   }
 
   function loadProgramAndDownstream(programId) {
@@ -195,6 +224,8 @@ const CustomerView = (function () {
 
           <div style="font-size:12px; color:var(--muted); margin:0 2px 8px;">Participating businesses</div>
           ${offersHtml}
+
+          ${renderHistorySection()}
         </div>
       </div>
 
@@ -239,6 +270,29 @@ const CustomerView = (function () {
           }
           <div style="margin-top:16px;"><button data-action="close-live">Close</button></div>
         </div>
+      </div>`;
+  }
+
+  function renderHistorySection() {
+    if (state.redemptions.length === 0) return "";
+    const sorted = [...state.redemptions].sort((a, b) => b.timestamp - a.timestamp);
+    const rows = sorted.map((r) => {
+      const offer = getOfferInfo(r.offerId);
+      const merchant = offer ? state.merchants[offer.merchantId] : null;
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-top:1px solid var(--line);">
+          <div>
+            <div style="font-size:13px; font-weight:600;">${escapeHtml(merchant ? merchant.name : "Unknown merchant")}</div>
+            <div style="font-size:12px; color:var(--muted);">${escapeHtml(offer ? offer.terms : "")}</div>
+          </div>
+          <div style="font-size:11px; color:var(--muted); text-align:right;">✓ ${fmtDate(r.timestamp)}</div>
+        </div>`;
+    }).join("");
+
+    return `
+      <div style="margin-top:22px;">
+        <div style="font-size:12px; color:var(--muted); margin:0 2px 8px;">Redemption history</div>
+        <div class="card" style="padding:4px 14px;">${rows}</div>
       </div>`;
   }
 
