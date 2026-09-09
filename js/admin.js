@@ -115,13 +115,21 @@ const AdminView = (function () {
     await db.collection("merchants").doc(id).update({ archived });
     showToast(archived ? "Merchant archived" : "Merchant restored");
   }
-  async function createOffer(programId, merchantId, terms, exp) {
+  async function createOffer(programId, merchantId, terms, exp, discountType, discountValue) {
     if (!programId || !merchantId) { showToast("Create a campaign and a merchant first"); return; }
-    await db.collection("offers").add({ programId, merchantId, terms, expiresAt: exp || null, active: true, archived: false });
+    await db.collection("offers").add({
+      programId, merchantId, terms, expiresAt: exp || null, active: true, archived: false,
+      discountType: discountType || null,
+      discountValue: discountValue ? parseFloat(discountValue) : null,
+    });
     showToast("Offer added");
   }
-  async function updateOffer(id, merchantId, terms, exp) {
-    await db.collection("offers").doc(id).update({ merchantId, terms, expiresAt: exp || null });
+  async function updateOffer(id, merchantId, terms, exp, discountType, discountValue) {
+    await db.collection("offers").doc(id).update({
+      merchantId, terms, expiresAt: exp || null,
+      discountType: discountType || null,
+      discountValue: discountValue ? parseFloat(discountValue) : null,
+    });
     state.editingOfferId = null;
     showToast("Offer updated");
   }
@@ -148,7 +156,27 @@ const AdminView = (function () {
   }
 
   // ---------- render ----------
+  // Any Firestore listener firing (even for unrelated data, e.g. a customer redeeming
+  // something live) triggers a full re-render. Without this, whatever the admin is
+  // mid-typing in any field gets silently wiped the moment that happens.
+  function captureFocus() {
+    const el = document.activeElement;
+    if (!el || !el.id || !("value" in el)) return null;
+    return { id: el.id, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+  }
+  function restoreFocus(saved) {
+    if (!saved) return;
+    const el = document.getElementById(saved.id);
+    if (!el || !("value" in el)) return;
+    el.value = saved.value;
+    el.focus();
+    if (typeof saved.start === "number" && typeof el.setSelectionRange === "function") {
+      try { el.setSelectionRange(saved.start, saved.end); } catch (e) {}
+    }
+  }
+
   function render() {
+    const savedFocus = captureFocus();
     const app = document.getElementById("app");
     const org = state.orgs[0];
 
@@ -167,6 +195,7 @@ const AdminView = (function () {
         if (name) createOrg(name, cause);
       });
       app.querySelector('[data-action="sign-out"]').addEventListener("click", () => auth.signOut());
+      restoreFocus(savedFocus);
       return;
     }
 
@@ -194,6 +223,7 @@ const AdminView = (function () {
     document.getElementById("tab-content").innerHTML = renderTab(org);
     wireGlobalEvents();
     wireTabEvents(org);
+    restoreFocus(savedFocus);
   }
 
   function renderTab(org) {
@@ -316,12 +346,20 @@ const AdminView = (function () {
             <input type="date" id="edit-offer-expiry-${o.id}" value="${o.expiresAt || ""}" />
             <br/>
             <input id="edit-offer-terms-${o.id}" value="${escapeHtml(o.terms)}" style="margin-top:8px; width:280px;" />
+            <br/>
+            <select id="edit-offer-discount-type-${o.id}" style="margin-top:8px;">
+              <option value="" ${!o.discountType ? "selected" : ""}>No discount type (manual entry)</option>
+              <option value="amount" ${o.discountType === "amount" ? "selected" : ""}>Amount off ($)</option>
+              <option value="percent" ${o.discountType === "percent" ? "selected" : ""}>Percent off (%)</option>
+              <option value="fixed" ${o.discountType === "fixed" ? "selected" : ""}>Fixed value (e.g. BOGO) ($)</option>
+            </select>
+            <input type="number" step="0.01" min="0" id="edit-offer-discount-value-${o.id}" value="${o.discountValue ?? ""}" placeholder="Value" style="width:100px;" />
             <button class="primary" data-action="save-offer" data-id="${o.id}">Save</button>
             <button data-action="cancel-edit-offer">Cancel</button>
           </div>`;
       }
       return `<div style="font-size:13px; margin-bottom:6px;">
-        ${escapeHtml(m && m.name)} — ${escapeHtml(o.terms)} ${o.expiresAt ? `(expires ${o.expiresAt})` : ""} — ${o.active ? "active" : "inactive"}
+        ${escapeHtml(m && m.name)} — ${escapeHtml(o.terms)} ${discountLabel(o)} ${o.expiresAt ? `(expires ${o.expiresAt})` : ""} — ${o.active ? "active" : "inactive"}
         ${state.showArchivedOffers
           ? `<button data-action="unarchive-offer" data-id="${o.id}">Restore</button>`
           : `<button data-action="edit-offer" data-id="${o.id}">Edit</button>
@@ -340,7 +378,18 @@ const AdminView = (function () {
         <input type="date" id="offer-expiry" />
         <br/>
         <input id="offer-terms" placeholder="Offer terms, e.g. $5 off $5.01+" style="margin-top:8px; width:240px;" />
-        <button class="primary" data-action="create-offer">Add offer</button>
+        <br/>
+        <select id="offer-discount-type" style="margin-top:8px;">
+          <option value="">No discount type (manual entry)</option>
+          <option value="amount">Amount off ($)</option>
+          <option value="percent">Percent off (%)</option>
+          <option value="fixed">Fixed value (e.g. BOGO) ($)</option>
+        </select>
+        <input type="number" step="0.01" min="0" id="offer-discount-value" placeholder="Value" style="width:100px;" />
+        <div style="font-size:11px; color:var(--muted); margin-top:6px;">
+          "Amount off" / "Fixed value" → enter a dollar amount. "Percent off" → enter the percentage (e.g. 10 for 10%). This is what lets the customer app calculate their savings automatically from what they tell it they spent.
+        </div>
+        <button class="primary" data-action="create-offer" style="margin-top:8px;">Add offer</button>
       </div>
       <div class="row-flex" style="margin-bottom:12px;">
         <input id="offer-search" placeholder="Search offers by merchant or terms…" value="${escapeHtml(state.offerSearch)}" style="flex:1; min-width:180px;" />
@@ -349,6 +398,14 @@ const AdminView = (function () {
         </label>
       </div>
       ${rows || `<div style="font-size:13px; color:var(--muted);">${state.showArchivedOffers ? "No archived offers." : "No offers match."}</div>`}`;
+  }
+
+  function discountLabel(o) {
+    if (o.discountValue == null) return o.discountType ? "(discount value not set)" : "";
+    if (o.discountType === "amount") return `($${o.discountValue} off)`;
+    if (o.discountType === "percent") return `(${o.discountValue}% off)`;
+    if (o.discountType === "fixed") return `(~$${o.discountValue} value)`;
+    return "";
   }
 
   function renderProgramsTab(org) {
@@ -441,8 +498,10 @@ const AdminView = (function () {
       const programId = document.getElementById("offer-program").value;
       const merchantId = document.getElementById("offer-merchant").value;
       const exp = document.getElementById("offer-expiry").value;
+      const discountType = document.getElementById("offer-discount-type").value;
+      const discountValue = document.getElementById("offer-discount-value").value;
       const termsInput = document.getElementById("offer-terms");
-      if (termsInput.value.trim()) { createOffer(programId, merchantId, termsInput.value.trim(), exp); termsInput.value = ""; }
+      if (termsInput.value.trim()) { createOffer(programId, merchantId, termsInput.value.trim(), exp, discountType, discountValue); termsInput.value = ""; }
     });
     const offerSearchInput = app.querySelector("#offer-search");
     if (offerSearchInput) offerSearchInput.addEventListener("input", () => { state.offerSearch = offerSearchInput.value; render(); });
@@ -462,8 +521,10 @@ const AdminView = (function () {
         const id = el.dataset.id;
         const merchantId = document.getElementById(`edit-offer-merchant-${id}`).value;
         const exp = document.getElementById(`edit-offer-expiry-${id}`).value;
+        const discountType = document.getElementById(`edit-offer-discount-type-${id}`).value;
+        const discountValue = document.getElementById(`edit-offer-discount-value-${id}`).value;
         const terms = document.getElementById(`edit-offer-terms-${id}`).value.trim();
-        if (terms) updateOffer(id, merchantId, terms, exp);
+        if (terms) updateOffer(id, merchantId, terms, exp, discountType, discountValue);
       });
     });
     app.querySelectorAll('[data-action="archive-offer"]').forEach((el) => {
