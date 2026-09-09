@@ -198,7 +198,7 @@ const CustomerView = (function () {
                  ✓ ${fmtDate(redemption.timestamp)}${redemption.amountSaved != null ? ` · $${redemption.amountSaved.toFixed(2)} saved` : ""}
                </div>
                ${redemption.amountSaved == null
-                 ? `<button style="margin-top:8px; font-size:12px; padding:6px 10px;" data-action="reopen-amount" data-offer-id="${offer.id}">Add how much you saved</button>`
+                 ? `<button style="margin-top:8px; font-size:12px; padding:6px 10px;" data-action="reopen-amount" data-offer-id="${offer.id}">Add purchase details</button>`
                  : ""
                }`
             : `<button class="primary" style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">Redeem this offer</button>`
@@ -257,16 +257,43 @@ const CustomerView = (function () {
     wireEvents();
   }
 
-  async function submitAmountSaved(offerId, value) {
-    const amount = parseFloat(value);
-    if (isNaN(amount) || amount < 0) {
+  async function submitSpend(offerId, spendStr) {
+    const spend = parseFloat(spendStr);
+    if (isNaN(spend) || spend < 0) {
       state.amountSavedError = "Enter a valid amount.";
       render();
       return;
     }
+    const offer = getOfferInfo(offerId);
+    const type = offer && offer.discountType;
+    const hasValue = offer && offer.discountValue != null;
+    let savings;
+    let recordSpend = false;
+
+    if (type === "amount" || type === "fixed") {
+      if (hasValue) {
+        savings = offer.discountValue; // flat $ savings regardless of what was spent
+        recordSpend = true;
+      } else {
+        savings = spend; // discount type was set but no value entered — fall back to treating their input as the savings directly
+      }
+    } else if (type === "percent" && hasValue) {
+      // "spend" is treated as what they actually paid (post-discount) — the number on their receipt —
+      // so we back-calculate the original pre-discount price to find the dollar savings.
+      const pct = (offer.discountValue || 0) / 100;
+      savings = pct >= 1 ? spend : (spend * pct) / (1 - pct);
+      recordSpend = true;
+    } else {
+      // No discount type set on this offer (older offer created before this feature) —
+      // fall back to asking directly how much it saved them, no formula available.
+      savings = spend;
+    }
+    savings = Math.max(0, savings);
+
     const redemptionId = `${state.token}_${offerId}`;
     try {
-      await db.collection("redemptions").doc(redemptionId).update({ amountSaved: amount });
+      const updateData = recordSpend ? { amountSaved: savings, amountSpent: spend } : { amountSaved: savings };
+      await db.collection("redemptions").doc(redemptionId).update(updateData);
       state.amountSavedError = "";
     } catch (e) {
       state.amountSavedError = "Couldn't save that — try again.";
@@ -314,9 +341,10 @@ const CustomerView = (function () {
 
           <div style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.14);">
             ${amountSaved != null
-              ? `<div style="font-size:14px; color:#8FE0AA; font-weight:700;">You saved $${amountSaved.toFixed(2)}</div>`
+              ? `<div style="font-size:14px; color:#8FE0AA; font-weight:700;">You saved $${amountSaved.toFixed(2)}</div>
+                 ${redemption && redemption.amountSpent != null ? `<div style="font-size:11px; color:#9DBBDD; margin-top:2px;">on a $${redemption.amountSpent.toFixed(2)} purchase</div>` : ""}`
               : `
-                <div style="font-size:12px; color:#C0DD97; margin-bottom:8px;">How much did you spend?</div>
+                <div style="font-size:12px; color:#C0DD97; margin-bottom:8px;">${lo.offer.discountType && lo.offer.discountValue != null ? "How much did you spend?" : "How much did this offer save you?"}</div>
                 <div class="row-flex" style="justify-content:center;">
                   <input type="number" step="0.01" min="0" id="amount-saved-input" placeholder="$" value="${escapeHtml(state.amountSavedDraft || "")}" style="width:100px;" />
                   <button class="primary" data-action="submit-amount" data-offer-id="${lo.offer.id}">Save</button>
@@ -396,7 +424,7 @@ const CustomerView = (function () {
     const submitAmountBtn = app.querySelector('[data-action="submit-amount"]');
     if (submitAmountBtn) submitAmountBtn.addEventListener("click", () => {
       const val = document.getElementById("amount-saved-input").value;
-      submitAmountSaved(submitAmountBtn.dataset.offerId, val);
+      submitSpend(submitAmountBtn.dataset.offerId, val);
     });
     const amountInput = app.querySelector("#amount-saved-input");
     if (amountInput) amountInput.addEventListener("input", () => { state.amountSavedDraft = amountInput.value; });
