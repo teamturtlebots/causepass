@@ -4,6 +4,21 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CausePass</title>
+
+<!-- Makes the site installable to a home screen (Android/Chrome reads this) -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#1F3A5F" />
+
+<!-- iOS Safari doesn't fully use the manifest above, so it needs these separately -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="CausePass" />
+<link rel="apple-touch-icon" href="icons/icon-180.png" />
+
+<!-- Browser tab icon -->
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
@@ -26,6 +41,16 @@
 <script src="js/customer.js"></script>
 <script src="js/admin.js"></script>
 <script src="js/app.js"></script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {
+        // Installability just won't be offered if this fails — the app still works fine as a regular page.
+      });
+    });
+  }
+</script>
 
 </body>
 </html>
