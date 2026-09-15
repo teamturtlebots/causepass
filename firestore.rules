@@ -42,6 +42,13 @@ service cloud.firestore {
       allow update: if isAdmin() || isValidRedemptionIncrement();
     }
 
+    // Backs the human-readable pass number (e.g. "CP-0042") — admin-only,
+    // since only the admin dashboard ever creates passes.
+    match /counters/{counterId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
     // The core one-time-redemption guarantee: a redemption document's ID is
     // "{passToken}_{offerId}", so the SAME combination can only ever be
     // created once — Firestore itself refuses a second create at that ID,
@@ -50,7 +57,14 @@ service cloud.firestore {
       allow read: if true;
       allow create: if !exists(/databases/$(database)/documents/redemptions/$(redemptionId))
         && redemptionId == (request.resource.data.passToken + '_' + request.resource.data.offerId);
-      allow update, delete: if false;
+      // Lets the customer record how much they spent/saved, once, right after redeeming —
+      // no login involved, and it can never be changed once set (no re-editing after the fact).
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amountSaved', 'amountSpent'])
+        && !('amountSaved' in resource.data)
+        && request.resource.data.amountSaved is number
+        && request.resource.data.amountSaved >= 0
+        && (!('amountSpent' in request.resource.data) || (request.resource.data.amountSpent is number && request.resource.data.amountSpent >= 0));
+      allow delete: if false;
     }
 
     match /admins/{uid} {
