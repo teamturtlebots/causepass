@@ -20,6 +20,7 @@ const CustomerView = (function () {
       offerDetails: {}, // cache for offers referenced by past redemptions but no longer in the active offers list (e.g. archived since)
       redemptions: [],
       confirmOffer: null,
+      instructionsOpen: false,
       liveOffer: null,
       error: "",
       amountSavedError: "",
@@ -231,6 +232,8 @@ const CustomerView = (function () {
             ${renderSavedAmount()}
           </div>
 
+          ${renderInstructions(cap)}
+
           ${expired ? `<div class="banner red">This pass's campaign has expired.</div>` : ""}
           ${state.pass.status === "disabled" ? `<div class="banner red">This pass has been disabled.</div>` : ""}
           ${capped && !expired ? `<div class="banner amber">Redemption limit reached — get a new pass to keep saving.</div>` : ""}
@@ -298,6 +301,31 @@ const CustomerView = (function () {
     el.outerHTML = live
       ? `<div id="live-timer-chip" style="font-size:11px; background:rgba(255,255,255,0.1); display:inline-block; padding:5px 12px; border-radius:20px;">Live verification · ${mins}:${String(secs).padStart(2, "0")} remaining</div>`
       : `<div id="live-timer-chip" style="font-size:11px; color:#97C459;">Live window closed</div>`;
+  }
+
+  function renderInstructions(cap) {
+    const open = state.instructionsOpen;
+    return `
+      <div style="margin-bottom:16px; border:1px solid var(--line); border-radius:12px; overflow:hidden;">
+        <button data-action="toggle-instructions" style="width:100%; text-align:left; background:#fff; border:none; border-radius:0; padding:10px 12px; font-size:13px; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+          <span>ℹ️ How to use this pass</span>
+          <span style="color:var(--muted);">${open ? "▲" : "▼"}</span>
+        </button>
+        ${open ? `
+          <div style="padding:0 14px 14px; font-size:13px; color:var(--ink); line-height:1.6;">
+            <ol style="margin:0; padding-left:18px;">
+              <li>Browse the offers below, and pick one when you're ready to pay</li>
+              <li>Tap <strong>Redeem this offer</strong> — only once you're actually at the counter</li>
+              <li>Show the green <strong>Valid redemption</strong> screen to the cashier</li>
+              <li>No app, no login, nothing to install — this page is your pass</li>
+            </ol>
+            ${cap
+              ? `<div style="margin-top:10px; font-size:12px; color:var(--muted);">You can redeem up to <strong>${cap}</strong> offers total on this pass. Once you reach that, this pass is done — grab a new one to keep saving.</div>`
+              : ""
+            }
+          </div>
+        ` : ""}
+      </div>`;
   }
 
   function renderLiveValidation() {
@@ -389,6 +417,11 @@ const CustomerView = (function () {
 
   function wireEvents() {
     const app = document.getElementById("app");
+    const toggleInstructionsBtn = app.querySelector('[data-action="toggle-instructions"]');
+    if (toggleInstructionsBtn) toggleInstructionsBtn.addEventListener("click", () => {
+      state.instructionsOpen = !state.instructionsOpen;
+      render();
+    });
     app.querySelectorAll('[data-action="confirm-offer"]').forEach((el) => {
       el.addEventListener("click", () => {
         state.confirmOffer = state.offers.find((o) => o.id === el.dataset.offerId);
