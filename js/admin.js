@@ -50,11 +50,10 @@ const AdminView = (function () {
     state = {
       user, tab: "dashboard",
       orgs: [], programs: [], merchants: [], offers: [], passes: [], redemptions: [],
-      toast: null, lastLink: null,
+      toast: null,
       editingMerchantId: null, editingOfferId: null, editingProgramId: null,
       passSearch: "", merchantSearch: "", offerSearch: "",
       showArchivedMerchants: false, showArchivedOffers: false,
-      qrModalToken: null,
       batchBusy: false, batchProgress: "",
     };
 
@@ -165,18 +164,7 @@ const AdminView = (function () {
     return { id: t, passNumber };
   }
 
-  async function createPass(programId, customerName) {
-    if (!programId) { showToast("Create a campaign first"); return; }
-    try {
-      const { id, passNumber } = await createOnePass(programId, customerName);
-      state.lastLink = id;
-      showToast("Pass created — " + formatPassNumber(passNumber));
-    } catch (e) {
-      showToast("Couldn't create pass — try again");
-    }
-  }
-
-  async function batchGenerateAndPrint(programId, count) {
+  async function createPasses(programId, customerName, count) {
     if (!programId) { showToast("Choose a campaign first"); return; }
     const n = parseInt(count, 10);
     if (!n || n < 1 || n > 40) { showToast("Enter a number between 1 and 40"); return; }
@@ -185,7 +173,7 @@ const AdminView = (function () {
     const org = state.orgs[0];
 
     state.batchBusy = true;
-    state.batchProgress = "Creating passes… (0 / " + n + ")";
+    state.batchProgress = "Creating pass" + (n > 1 ? "es" : "") + "… (0 / " + n + ")";
     render();
 
     const created = [];
@@ -194,7 +182,7 @@ const AdminView = (function () {
       // them one at a time keeps pass numbers assigned in a clean, predictable
       // order instead of racing many transactions against each other at once.
       for (let i = 0; i < n; i++) {
-        const pass = await createOnePass(programId, "");
+        const pass = await createOnePass(programId, customerName || "");
         created.push(pass);
         state.batchProgress = "Creating passes… (" + (i + 1) + " / " + n + ")";
         render();
@@ -209,7 +197,7 @@ const AdminView = (function () {
         render();
       });
 
-      showToast(n + " passes created — PDF downloaded");
+      showToast(n + " pass" + (n > 1 ? "es" : "") + " created — PDF downloaded");
     } catch (e) {
       showToast("Something went wrong partway through — " + created.length + " of " + n + " passes were created");
     }
@@ -314,7 +302,6 @@ const AdminView = (function () {
   }
 
   function renderPassesTab() {
-    const link = state.lastLink ? window.location.origin + window.location.pathname + "#/p/" + state.lastLink : null;
     const search = (state.passSearch || "").toLowerCase();
     const filtered = state.passes
       .filter((p) => !search || p.customerName.toLowerCase().includes(search) || p.id.toLowerCase().includes(search) || (p.passNumber && formatPassNumber(p.passNumber).toLowerCase().includes(search)))
@@ -335,7 +322,6 @@ const AdminView = (function () {
           <span class="badge ${p.status === "disabled" ? "red" : "green"}">${p.status === "disabled" ? "Disabled" : "Active"}</span>
           <div class="row-flex">
             <a href="${passLink}" target="_blank" rel="noreferrer">View as customer</a>
-            <button data-action="show-qr" data-token="${p.id}" style="padding:6px 10px; font-size:12px;">QR code</button>
             ${p.status !== "disabled" ? `<button class="danger" data-action="disable-pass" data-token="${p.id}">Disable</button>` : ""}
           </div>
         </div>`;
@@ -343,45 +329,17 @@ const AdminView = (function () {
 
     return `
       <div class="card">
-        <div style="font-weight:700; margin-bottom:10px;">Create a customer pass</div>
-        <select id="pass-program">${state.programs.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>
-        <input id="pass-customer" placeholder="Customer name" />
-        <button class="primary" data-action="create-pass">Create pass</button>
-        ${link ? `<div style="margin-top:10px; font-size:13px;">Link: <code>${link}</code> <button data-action="show-qr" data-token="${state.lastLink}" style="padding:4px 8px; font-size:12px;">QR code</button></div>` : ""}
-      </div>
-
-      <div class="card">
-        <div style="font-weight:700; margin-bottom:4px;">Batch-generate printable cards</div>
-        <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Creates real, working passes (same as one-by-one) with no name attached yet, and gives you a print-ready PDF to cut apart and sell in person.</div>
-        <select id="batch-program">${state.programs.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>
-        <input id="batch-count" type="number" min="1" max="40" placeholder="How many? (max 40)" style="width:150px;" />
-        <button class="primary" data-action="batch-generate" ${state.batchBusy ? "disabled" : ""}>${state.batchBusy ? "Working…" : "Generate & download PDF"}</button>
+        <div style="font-weight:700; margin-bottom:4px;">Create Passes</div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Works for a single customer pass or a whole order at once — creates real, working passes and gives you a print-ready PDF with each one's QR code, ready to email, print, or hand over.</div>
+        <select id="create-program">${state.programs.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>
+        <input id="create-customer" placeholder="Customer name (optional)" />
+        <input id="create-count" type="number" min="1" max="40" placeholder="How many? (max 40)" style="width:150px;" />
+        <button class="primary" data-action="create-passes" ${state.batchBusy ? "disabled" : ""}>${state.batchBusy ? "Working…" : "Create & download PDF"}</button>
         ${state.batchProgress ? `<div style="font-size:13px; color:var(--muted); margin-top:8px;">${escapeHtml(state.batchProgress)}</div>` : ""}
       </div>
 
       <input id="pass-search" placeholder="Search by pass #, customer name, or token…" value="${escapeHtml(state.passSearch)}" style="margin-bottom:10px; width:100%;" />
-      <div class="list-box">${rows || `<div style="padding:16px; font-size:13px; color:var(--muted);">No passes match.</div>`}</div>
-      ${state.qrModalToken ? renderQrModal() : ""}`;
-  }
-
-  function renderQrModal() {
-    const p = state.passes.find((pp) => pp.id === state.qrModalToken);
-    if (!p) return "";
-    const program = state.programs.find((pr) => pr.id === p.programId);
-    const passLink = window.location.origin + window.location.pathname + "#/p/" + p.id;
-    return `
-      <div class="modal-backdrop" style="max-width:320px;">
-        <div class="modal" style="text-align:center;">
-          <div style="font-weight:700; margin-bottom:2px;">${p.passNumber ? escapeHtml(formatPassNumber(p.passNumber)) + " — " : ""}${escapeHtml(p.customerName)}</div>
-          <div style="font-size:12px; color:var(--muted); margin-bottom:14px;">${escapeHtml(program && program.name)}</div>
-          <div id="qr-code-container" style="display:flex; justify-content:center; margin-bottom:12px;"></div>
-          <div class="mono" style="font-size:11px; word-break:break-all; margin-bottom:14px;">${passLink}</div>
-          <div class="row-flex" style="justify-content:center;">
-            <button data-action="download-qr">Download PNG</button>
-            <button data-action="close-qr">Close</button>
-          </div>
-        </div>
-      </div>`;
+      <div class="list-box">${rows || `<div style="padding:16px; font-size:13px; color:var(--muted);">No passes match.</div>`}</div>`;
   }
 
   function renderMerchantsTab(org) {
@@ -532,22 +490,6 @@ const AdminView = (function () {
       ${rows}`;
   }
 
-  function drawQrCodeIfNeeded() {
-    if (!state.qrModalToken) return;
-    const container = document.getElementById("qr-code-container");
-    if (!container) return;
-    container.innerHTML = ""; // clear any previous draw before redrawing
-    const passLink = window.location.origin + window.location.pathname + "#/p/" + state.qrModalToken;
-    new QRCode(container, {
-      text: passLink,
-      width: 200,
-      height: 200,
-      colorDark: "#1F3A5F",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.M,
-    });
-  }
-
   function wireGlobalEvents() {
     const app = document.getElementById("app");
     app.querySelector('[data-action="sign-out"]').addEventListener("click", () => auth.signOut());
@@ -560,40 +502,18 @@ const AdminView = (function () {
     const app = document.getElementById("app");
 
     // --- passes ---
-    const createPassBtn = app.querySelector('[data-action="create-pass"]');
-    if (createPassBtn) createPassBtn.addEventListener("click", () => {
-      const programId = document.getElementById("pass-program").value;
-      const nameInput = document.getElementById("pass-customer");
-      if (nameInput.value.trim()) { createPass(programId, nameInput.value.trim()); nameInput.value = ""; }
-    });
-    const batchGenerateBtn = app.querySelector('[data-action="batch-generate"]');
-    if (batchGenerateBtn) batchGenerateBtn.addEventListener("click", () => {
-      const programId = document.getElementById("batch-program").value;
-      const count = document.getElementById("batch-count").value;
-      batchGenerateAndPrint(programId, count);
+    const createPassesBtn = app.querySelector('[data-action="create-passes"]');
+    if (createPassesBtn) createPassesBtn.addEventListener("click", () => {
+      const programId = document.getElementById("create-program").value;
+      const customerName = document.getElementById("create-customer").value.trim();
+      const count = document.getElementById("create-count").value;
+      createPasses(programId, customerName, count);
     });
     app.querySelectorAll('[data-action="disable-pass"]').forEach((el) => {
       el.addEventListener("click", () => disablePass(el.dataset.token));
     });
     const passSearchInput = app.querySelector("#pass-search");
     if (passSearchInput) passSearchInput.addEventListener("input", () => { state.passSearch = passSearchInput.value; render(); });
-
-    app.querySelectorAll('[data-action="show-qr"]').forEach((el) => {
-      el.addEventListener("click", () => { state.qrModalToken = el.dataset.token; render(); });
-    });
-    const closeQrBtn = app.querySelector('[data-action="close-qr"]');
-    if (closeQrBtn) closeQrBtn.addEventListener("click", () => { state.qrModalToken = null; render(); });
-    const downloadQrBtn = app.querySelector('[data-action="download-qr"]');
-    if (downloadQrBtn) downloadQrBtn.addEventListener("click", () => {
-      const canvas = document.querySelector("#qr-code-container canvas");
-      if (!canvas) return;
-      const p = state.passes.find((pp) => pp.id === state.qrModalToken);
-      const link = document.createElement("a");
-      link.download = (p && p.passNumber ? formatPassNumber(p.passNumber) : "causepass") + "-qr.png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    });
-    drawQrCodeIfNeeded();
 
     // --- merchants ---
     const createMerchantBtn = app.querySelector('[data-action="create-merchant"]');
