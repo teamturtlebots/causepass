@@ -115,20 +115,20 @@ const AdminView = (function () {
     await db.collection("merchants").doc(id).update({ archived });
     showToast(archived ? "Merchant archived" : "Merchant restored");
   }
-  async function createOffer(programId, merchantId, terms, exp, discountType, discountValue) {
+  async function createOffer(programId, merchantId, terms, exp, discountAmount, minPurchase) {
     if (!programId || !merchantId) { showToast("Create a campaign and a merchant first"); return; }
     await db.collection("offers").add({
       programId, merchantId, terms, expiresAt: exp || null, active: true, archived: false,
-      discountType: discountType || null,
-      discountValue: discountValue ? parseFloat(discountValue) : null,
+      discountAmount: discountAmount ? parseFloat(discountAmount) : null,
+      minPurchase: minPurchase ? parseFloat(minPurchase) : null,
     });
     showToast("Offer added");
   }
-  async function updateOffer(id, merchantId, terms, exp, discountType, discountValue) {
+  async function updateOffer(id, merchantId, terms, exp, discountAmount, minPurchase) {
     await db.collection("offers").doc(id).update({
       merchantId, terms, expiresAt: exp || null,
-      discountType: discountType || null,
-      discountValue: discountValue ? parseFloat(discountValue) : null,
+      discountAmount: discountAmount ? parseFloat(discountAmount) : null,
+      minPurchase: minPurchase ? parseFloat(minPurchase) : null,
     });
     state.editingOfferId = null;
     showToast("Offer updated");
@@ -360,15 +360,12 @@ const AdminView = (function () {
             <br/>
             <input id="edit-offer-terms-${o.id}" value="${escapeHtml(o.terms)}" style="margin-top:8px; width:280px;" />
             <br/>
-            <select id="edit-offer-discount-type-${o.id}" style="margin-top:8px;">
-              <option value="" ${!o.discountType ? "selected" : ""}>No discount type (manual entry)</option>
-              <option value="amount" ${o.discountType === "amount" ? "selected" : ""}>Amount off ($)</option>
-              <option value="percent" ${o.discountType === "percent" ? "selected" : ""}>Percent off (%)</option>
-              <option value="fixed" ${o.discountType === "fixed" ? "selected" : ""}>Fixed value (e.g. BOGO) ($)</option>
-            </select>
-            <input type="number" step="0.01" min="0" id="edit-offer-discount-value-${o.id}" value="${o.discountValue ?? ""}" placeholder="Value" style="width:100px;" />
-            <button class="primary" data-action="save-offer" data-id="${o.id}">Save</button>
-            <button data-action="cancel-edit-offer">Cancel</button>
+            <input type="number" step="0.01" min="0" id="edit-offer-discount-amount-${o.id}" value="${o.discountAmount ?? ""}" placeholder="Discount amount $" style="margin-top:8px; width:140px;" />
+            <input type="number" step="0.01" min="0" id="edit-offer-min-purchase-${o.id}" value="${o.minPurchase ?? ""}" placeholder="Min. purchase $ (optional)" style="width:170px;" />
+            <div style="margin-top:8px;">
+              <button class="primary" data-action="save-offer" data-id="${o.id}">Save</button>
+              <button data-action="cancel-edit-offer">Cancel</button>
+            </div>
           </div>`;
       }
       return `<div style="font-size:13px; margin-bottom:6px;">
@@ -390,17 +387,12 @@ const AdminView = (function () {
         <select id="offer-merchant">${merchantOptionsForNew.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join("")}</select>
         <input type="date" id="offer-expiry" />
         <br/>
-        <input id="offer-terms" placeholder="Offer terms, e.g. $5 off $5.01+" style="margin-top:8px; width:240px;" />
+        <input id="offer-terms" placeholder="Offer terms, e.g. $5 off $50+" style="margin-top:8px; width:240px;" />
         <br/>
-        <select id="offer-discount-type" style="margin-top:8px;">
-          <option value="">No discount type (manual entry)</option>
-          <option value="amount">Amount off ($)</option>
-          <option value="percent">Percent off (%)</option>
-          <option value="fixed">Fixed value (e.g. BOGO) ($)</option>
-        </select>
-        <input type="number" step="0.01" min="0" id="offer-discount-value" placeholder="Value" style="width:100px;" />
+        <input type="number" step="0.01" min="0" id="offer-discount-amount" placeholder="Discount amount $" style="margin-top:8px; width:140px;" />
+        <input type="number" step="0.01" min="0" id="offer-min-purchase" placeholder="Min. purchase $ (optional)" style="width:170px;" />
         <div style="font-size:11px; color:var(--muted); margin-top:6px;">
-          "Amount off" / "Fixed value" → enter a dollar amount. "Percent off" → enter the percentage (e.g. 10 for 10%). This is what lets the customer app calculate their savings automatically from what they tell it they spent.
+          E.g. for "$5 off $50+": Discount amount = 5, Minimum purchase = 50. This is the exact dollar amount shown to customers as their savings — no calculation needed.
         </div>
         <button class="primary" data-action="create-offer" style="margin-top:8px;">Add offer</button>
       </div>
@@ -414,11 +406,8 @@ const AdminView = (function () {
   }
 
   function discountLabel(o) {
-    if (o.discountValue == null) return o.discountType ? "(discount value not set)" : "";
-    if (o.discountType === "amount") return `($${o.discountValue} off)`;
-    if (o.discountType === "percent") return `(${o.discountValue}% off)`;
-    if (o.discountType === "fixed") return `(~$${o.discountValue} value)`;
-    return "";
+    if (o.discountAmount == null) return "(discount amount not set)";
+    return o.minPurchase != null ? `($${o.discountAmount} off $${o.minPurchase}+)` : `($${o.discountAmount} off)`;
   }
 
   function renderProgramsTab(org) {
@@ -511,10 +500,10 @@ const AdminView = (function () {
       const programId = document.getElementById("offer-program").value;
       const merchantId = document.getElementById("offer-merchant").value;
       const exp = document.getElementById("offer-expiry").value;
-      const discountType = document.getElementById("offer-discount-type").value;
-      const discountValue = document.getElementById("offer-discount-value").value;
+      const discountAmount = document.getElementById("offer-discount-amount").value;
+      const minPurchase = document.getElementById("offer-min-purchase").value;
       const termsInput = document.getElementById("offer-terms");
-      if (termsInput.value.trim()) { createOffer(programId, merchantId, termsInput.value.trim(), exp, discountType, discountValue); termsInput.value = ""; }
+      if (termsInput.value.trim()) { createOffer(programId, merchantId, termsInput.value.trim(), exp, discountAmount, minPurchase); termsInput.value = ""; }
     });
     const offerSearchInput = app.querySelector("#offer-search");
     if (offerSearchInput) offerSearchInput.addEventListener("input", () => { state.offerSearch = offerSearchInput.value; render(); });
@@ -534,10 +523,10 @@ const AdminView = (function () {
         const id = el.dataset.id;
         const merchantId = document.getElementById(`edit-offer-merchant-${id}`).value;
         const exp = document.getElementById(`edit-offer-expiry-${id}`).value;
-        const discountType = document.getElementById(`edit-offer-discount-type-${id}`).value;
-        const discountValue = document.getElementById(`edit-offer-discount-value-${id}`).value;
+        const discountAmount = document.getElementById(`edit-offer-discount-amount-${id}`).value;
+        const minPurchase = document.getElementById(`edit-offer-min-purchase-${id}`).value;
         const terms = document.getElementById(`edit-offer-terms-${id}`).value.trim();
-        if (terms) updateOffer(id, merchantId, terms, exp, discountType, discountValue);
+        if (terms) updateOffer(id, merchantId, terms, exp, discountAmount, minPurchase);
       });
     });
     app.querySelectorAll('[data-action="archive-offer"]').forEach((el) => {
