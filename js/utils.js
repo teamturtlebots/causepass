@@ -27,3 +27,9 @@ function getCustomerTokenFromHash() {
   const match = window.location.hash.match(/^#\/p\/(.+)$/);
   return match ? match[1] : null;
 }
+
+// Human-readable pass number for staff to reference out loud, on paper, etc. —
+// separate from the token, which stays the secure/URL identifier.
+function formatPassNumber(n) {
+  return "CP-" + String(n).padStart(4, "0");
+}

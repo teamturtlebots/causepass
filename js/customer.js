@@ -211,7 +211,7 @@ const CustomerView = (function () {
         <div class="customer-inner">
           <div style="text-align:center; margin-bottom:18px;">
             <div class="display" style="font-size:20px;">${escapeHtml(state.org && state.org.name)} ${escapeHtml(state.program.name)}</div>
-            <div style="font-size:12px; color:var(--muted); margin-top:2px;">Powered by CausePass</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">Powered by CausePass${state.pass.passNumber ? ` · Pass ${escapeHtml(formatPassNumber(state.pass.passNumber))}` : ""}</div>
           </div>
 
           <div class="pass-hero">

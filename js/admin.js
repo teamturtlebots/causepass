@@ -143,11 +143,24 @@ const AdminView = (function () {
   async function createPass(programId, customerName) {
     if (!programId) { showToast("Create a campaign first"); return; }
     const t = randomToken();
-    await db.collection("passes").doc(t).set({
-      programId, customerName, status: "active", redeemedCount: 0, createdAt: Date.now(),
-    });
-    state.lastLink = t;
-    showToast("Pass created");
+    const counterRef = db.collection("counters").doc("passes");
+    const passRef = db.collection("passes").doc(t);
+    try {
+      const passNumber = await db.runTransaction(async (tx) => {
+        const counterSnap = await tx.get(counterRef);
+        const next = counterSnap.exists ? (counterSnap.data().next || 1) : 1;
+        tx.set(counterRef, { next: next + 1 }, { merge: true });
+        tx.set(passRef, {
+          programId, customerName, status: "active", redeemedCount: 0, createdAt: Date.now(),
+          passNumber: next,
+        });
+        return next;
+      });
+      state.lastLink = t;
+      showToast("Pass created — " + formatPassNumber(passNumber));
+    } catch (e) {
+      showToast("Couldn't create pass — try again");
+    }
   }
   async function disablePass(token) {
     if (!confirm("Disable this pass? The customer will no longer be able to redeem any offers on it.")) return;
@@ -248,7 +261,7 @@ const AdminView = (function () {
     const link = state.lastLink ? window.location.origin + window.location.pathname + "#/p/" + state.lastLink : null;
     const search = (state.passSearch || "").toLowerCase();
     const filtered = state.passes
-      .filter((p) => !search || p.customerName.toLowerCase().includes(search) || p.id.toLowerCase().includes(search))
+      .filter((p) => !search || p.customerName.toLowerCase().includes(search) || p.id.toLowerCase().includes(search) || (p.passNumber && formatPassNumber(p.passNumber).toLowerCase().includes(search)))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // newest first
 
     const rows = filtered.map((p) => {
@@ -258,7 +271,7 @@ const AdminView = (function () {
       return `
         <div class="list-item">
           <div style="min-width:140px;">
-            <div style="font-weight:600;">${escapeHtml(p.customerName)}</div>
+            <div style="font-weight:600;">${p.passNumber ? escapeHtml(formatPassNumber(p.passNumber)) + " — " : ""}${escapeHtml(p.customerName)}</div>
             <div style="font-size:12px; color:var(--muted);">${escapeHtml(program && program.name)} · ${fmtDate(p.createdAt)}</div>
           </div>
           <div class="mono">${passLink}</div>
@@ -279,7 +292,7 @@ const AdminView = (function () {
         <button class="primary" data-action="create-pass">Create pass</button>
         ${link ? `<div style="margin-top:10px; font-size:13px;">Link: <code>${link}</code></div>` : ""}
       </div>
-      <input id="pass-search" placeholder="Search by customer name or token…" value="${escapeHtml(state.passSearch)}" style="margin-bottom:10px; width:100%;" />
+      <input id="pass-search" placeholder="Search by pass #, customer name, or token…" value="${escapeHtml(state.passSearch)}" style="margin-bottom:10px; width:100%;" />
       <div class="list-box">${rows || `<div style="padding:16px; font-size:13px; color:var(--muted);">No passes match.</div>`}</div>`;
   }
 
