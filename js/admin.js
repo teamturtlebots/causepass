@@ -55,6 +55,7 @@ const AdminView = (function () {
       passSearch: "", merchantSearch: "", offerSearch: "",
       showArchivedMerchants: false, showArchivedOffers: false,
       batchBusy: false, batchProgress: "",
+      reportCampaign: "", reportMerchant: "", reportStart: "", reportEnd: "",
     };
 
     subscribe("organizations", "orgs");
@@ -292,13 +293,85 @@ const AdminView = (function () {
           <div class="stat-card"><div class="label">Redemptions</div><div class="value">${state.redemptions.length}</div></div>
           <div class="stat-card"><div class="label">Active merchants</div><div class="value">${activeMerchants}</div></div>
           <div class="stat-card"><div class="label">Campaigns</div><div class="value">${state.programs.length}</div></div>
-        </div>`;
+        </div>
+
+        <div style="font-size:13px; font-weight:700; margin:20px 0 10px;">Filter by campaign, merchant, or date</div>
+        ${renderReportsTab()}`;
     }
     if (state.tab === "passes") return renderPassesTab();
     if (state.tab === "merchants") return renderMerchantsTab(org);
     if (state.tab === "offers") return renderOffersTab();
     if (state.tab === "programs") return renderProgramsTab(org);
     return "";
+  }
+
+  // Filters + totals for the report. Runs entirely over data already loaded
+  // in memory (no extra Firestore queries) — every redemption's offer tells us
+  // its campaign and merchant, so date/campaign/merchant filtering is just a
+  // local array filter, and the numbers recompute instantly as filters change.
+  function computeReport() {
+    const startTs = state.reportStart ? new Date(state.reportStart + "T00:00:00").getTime() : null;
+    const endTs = state.reportEnd ? new Date(state.reportEnd + "T23:59:59").getTime() : null;
+
+    const filtered = state.redemptions.filter((r) => {
+      const offer = state.offers.find((o) => o.id === r.offerId);
+      if (!offer) return false; // orphaned redemption record with no matching offer — excluded rather than guessed at
+      if (state.reportCampaign && offer.programId !== state.reportCampaign) return false;
+      if (state.reportMerchant && offer.merchantId !== state.reportMerchant) return false;
+      if (startTs && r.timestamp < startTs) return false;
+      if (endTs && r.timestamp > endTs) return false;
+      return true;
+    });
+
+    let totalSavings = 0, totalRevenue = 0, reportedCount = 0, estimatedCount = 0, unknownCount = 0;
+    filtered.forEach((r) => {
+      totalSavings += r.discountAmount || 0;
+      const offer = state.offers.find((o) => o.id === r.offerId);
+      if (r.amountSpent != null) {
+        totalRevenue += r.amountSpent;
+        reportedCount++;
+      } else if (offer && offer.minPurchase != null) {
+        totalRevenue += offer.minPurchase;
+        estimatedCount++;
+      } else {
+        unknownCount++;
+      }
+    });
+
+    return { count: filtered.length, totalSavings, totalRevenue, reportedCount, estimatedCount, unknownCount };
+  }
+
+  function renderReportsTab() {
+    const campaignOptions = `<option value="">All campaigns</option>` +
+      state.programs.map((p) => `<option value="${p.id}" ${state.reportCampaign === p.id ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
+    const merchantOptions = `<option value="">All merchants</option>` +
+      state.merchants.map((m) => `<option value="${m.id}" ${state.reportMerchant === m.id ? "selected" : ""}>${escapeHtml(m.name)}${m.archived ? " (archived)" : ""}</option>`).join("");
+
+    const r = computeReport();
+
+    return `
+      <div class="card">
+        <div class="row-flex">
+          <select id="report-campaign">${campaignOptions}</select>
+          <select id="report-merchant">${merchantOptions}</select>
+          <input type="date" id="report-start" value="${state.reportStart || ""}" />
+          <span style="font-size:12px; color:var(--muted);">to</span>
+          <input type="date" id="report-end" value="${state.reportEnd || ""}" />
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="label">Redemptions</div><div class="value">${r.count}</div></div>
+        <div class="stat-card"><div class="label">Total savings given</div><div class="value">$${r.totalSavings.toFixed(2)}</div></div>
+        <div class="stat-card"><div class="label">Estimated revenue driven</div><div class="value">$${r.totalRevenue.toFixed(2)}</div></div>
+      </div>
+
+      <div style="font-size:12px; color:var(--muted); margin-top:12px;">
+        ${r.count === 0
+          ? "No redemptions match these filters."
+          : `Revenue figure: ${r.reportedCount} redemption${r.reportedCount === 1 ? "" : "s"} with a customer-reported purchase amount, ${r.estimatedCount} estimated from the offer's minimum purchase, ${r.unknownCount} with no amount available either way.`
+        }
+      </div>`;
   }
 
   function renderPassesTab() {
@@ -500,6 +573,16 @@ const AdminView = (function () {
 
   function wireTabEvents(org) {
     const app = document.getElementById("app");
+
+    // --- reports ---
+    const reportCampaignSelect = app.querySelector("#report-campaign");
+    if (reportCampaignSelect) reportCampaignSelect.addEventListener("change", () => { state.reportCampaign = reportCampaignSelect.value; render(); });
+    const reportMerchantSelect = app.querySelector("#report-merchant");
+    if (reportMerchantSelect) reportMerchantSelect.addEventListener("change", () => { state.reportMerchant = reportMerchantSelect.value; render(); });
+    const reportStartInput = app.querySelector("#report-start");
+    if (reportStartInput) reportStartInput.addEventListener("change", () => { state.reportStart = reportStartInput.value; render(); });
+    const reportEndInput = app.querySelector("#report-end");
+    if (reportEndInput) reportEndInput.addEventListener("change", () => { state.reportEnd = reportEndInput.value; render(); });
 
     // --- passes ---
     const createPassesBtn = app.querySelector('[data-action="create-passes"]');
