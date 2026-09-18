@@ -471,6 +471,7 @@ const AdminView = (function () {
           <span class="badge ${p.status === "disabled" ? "red" : "green"}">${p.status === "disabled" ? "Disabled" : "Active"}</span>
           <div class="row-flex">
             <a href="${passLink}" target="_blank" rel="noreferrer">View as customer</a>
+            <button data-action="copy-link" data-link="${passLink}">Copy link</button>
             ${!sold ? `<button data-action="start-mark-sold" data-id="${p.id}">Mark as sold</button>` : ""}
             ${p.status !== "disabled" ? `<button class="danger" data-action="disable-pass" data-token="${p.id}">Disable</button>` : ""}
           </div>
@@ -674,6 +675,16 @@ const AdminView = (function () {
     });
     app.querySelectorAll('[data-action="disable-pass"]').forEach((el) => {
       el.addEventListener("click", () => disablePass(el.dataset.token));
+    });
+    app.querySelectorAll('[data-action="copy-link"]').forEach((el) => {
+      el.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(el.dataset.link);
+          showToast("Link copied");
+        } catch (e) {
+          showToast("Couldn't copy — select and copy the link manually");
+        }
+      });
     });
     app.querySelectorAll('[data-action="start-mark-sold"]').forEach((el) => {
       el.addEventListener("click", () => { state.markingSoldId = el.dataset.id; render(); });
