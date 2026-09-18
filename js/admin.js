@@ -463,7 +463,7 @@ const AdminView = (function () {
         <div class="list-item">
           <div style="min-width:140px;">
             <div style="font-weight:600;">${p.passNumber ? escapeHtml(formatPassNumber(p.passNumber)) + " — " : ""}${p.customerName ? escapeHtml(p.customerName) : "(unassigned — printed card)"}</div>
-            <div style="font-size:12px; color:var(--muted);">${escapeHtml(program && program.name)} · ${fmtDate(p.createdAt)}</div>
+            <div style="font-size:12px; color:var(--muted);">${escapeHtml(program && program.name)} · ${sold ? "Sold " + fmtDate(p.soldAt) : "Printed " + fmtDate(p.createdAt)}</div>
           </div>
           <div class="mono">${passLink}</div>
           <div>${used}${program && program.maxRedemptions ? ` / ${program.maxRedemptions}` : ""} redeemed</div>
