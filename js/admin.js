@@ -249,6 +249,24 @@ const AdminView = (function () {
     showToast("Pass disabled");
   }
 
+  async function resetTestPass(passId) {
+    const pass = state.passes.find((p) => p.id === passId);
+    const program = pass && state.programs.find((pr) => pr.id === pass.programId);
+    if (!program || !program.isTest) { showToast("Reset only works for passes under a test campaign"); return; }
+    if (!confirm("Reset this pass? All redemption history on it will be permanently deleted and it will look brand new again — only possible because it's under a test campaign.")) return;
+
+    try {
+      const snap = await db.collection("redemptions").where("passToken", "==", passId).get();
+      const batch = db.batch();
+      snap.docs.forEach((doc) => batch.delete(doc.ref));
+      batch.update(db.collection("passes").doc(passId), { redeemedCount: 0 });
+      await batch.commit();
+      showToast("Pass reset — ready for a fresh demo");
+    } catch (e) {
+      showToast("Couldn't reset — try again");
+    }
+  }
+
   // ---------- render ----------
   // Any Firestore listener firing (even for unrelated data, e.g. a customer redeeming
   // something live) triggers a full re-render. Without this, whatever the admin is
@@ -511,6 +529,7 @@ const AdminView = (function () {
             <a href="${passLink}" target="_blank" rel="noreferrer">View as customer</a>
             <button data-action="copy-link" data-link="${passLink}">Copy link</button>
             <button data-action="start-mark-sold" data-id="${p.id}">${sold ? "Edit sale" : "Mark as sold"}</button>
+            ${program && program.isTest ? `<button data-action="reset-test-pass" data-id="${p.id}">Reset</button>` : ""}
             ${p.status !== "disabled" ? `<button class="danger" data-action="disable-pass" data-token="${p.id}">Disable</button>` : ""}
           </div>
         </div>`;
@@ -742,6 +761,9 @@ const AdminView = (function () {
           showToast("Couldn't copy — select and copy the link manually");
         }
       });
+    });
+    app.querySelectorAll('[data-action="reset-test-pass"]').forEach((el) => {
+      el.addEventListener("click", () => resetTestPass(el.dataset.id));
     });
     app.querySelectorAll('[data-action="start-mark-sold"]').forEach((el) => {
       el.addEventListener("click", () => { state.markingSoldId = el.dataset.id; render(); });
