@@ -26,6 +26,7 @@ const AdminView = (function () {
         <div id="login-error" class="banner red" style="display:none;"></div>
         <button type="submit" class="primary">Sign in</button>
         <p style="font-size:12px; color:var(--muted); margin-top:14px;">Admin accounts are created in the Firebase console, not here.</p>
+        <p style="font-size:12px; margin-top:6px;"><a href="#/">← Back to CausePass</a></p>
       </form>`;
 
     document.getElementById("login-form").addEventListener("submit", async (e) => {
@@ -88,21 +89,23 @@ const AdminView = (function () {
     await db.collection("organizations").add({ name, cause });
     showToast("Organization created");
   }
-  async function createProgram(orgId, name, cap, exp, tagline) {
+  async function createProgram(orgId, name, cap, exp, tagline, zeffyLink) {
     await db.collection("programs").add({
       orgId, name,
       maxRedemptions: cap ? parseInt(cap, 10) : null,
       expiresAt: exp || null,
       tagline: tagline || null,
+      zeffyLink: zeffyLink || null,
     });
     showToast("Campaign created");
   }
-  async function updateProgram(id, name, cap, exp, tagline) {
+  async function updateProgram(id, name, cap, exp, tagline, zeffyLink) {
     await db.collection("programs").doc(id).update({
       name,
       maxRedemptions: cap ? parseInt(cap, 10) : null,
       expiresAt: exp || null,
       tagline: tagline || null,
+      zeffyLink: zeffyLink || null,
     });
     state.editingProgramId = null;
     showToast("Campaign updated");
@@ -634,6 +637,8 @@ const AdminView = (function () {
             <input id="edit-program-expiry-${p.id}" type="date" value="${p.expiresAt || ""}" />
             <br/>
             <input id="edit-program-tagline-${p.id}" value="${escapeHtml(p.tagline || "")}" placeholder="Tagline for printed cards (optional)" style="margin-top:8px; width:320px;" />
+            <br/>
+            <input id="edit-program-zeffy-${p.id}" value="${escapeHtml(p.zeffyLink || "")}" placeholder="Zeffy checkout link (optional)" style="margin-top:8px; width:400px;" />
             <div style="margin-top:8px;">
               <button class="primary" data-action="save-program" data-id="${p.id}">Save</button>
               <button data-action="cancel-edit-program">Cancel</button>
@@ -642,7 +647,7 @@ const AdminView = (function () {
       }
       return `
         <div style="font-size:13px; margin-bottom:6px;">
-          ${escapeHtml(p.name)} — cap: ${p.maxRedemptions ?? "none"} — expires: ${p.expiresAt || "never"}${p.tagline ? ` — "${escapeHtml(p.tagline)}"` : ""}
+          ${escapeHtml(p.name)} — cap: ${p.maxRedemptions ?? "none"} — expires: ${p.expiresAt || "never"}${p.tagline ? ` — "${escapeHtml(p.tagline)}"` : ""}${p.zeffyLink ? ` — <a href="${escapeHtml(p.zeffyLink)}" target="_blank" rel="noreferrer">Zeffy link ✓</a>` : " — no Zeffy link set"}
           <button data-action="edit-program" data-id="${p.id}">Edit</button>
         </div>`;
     }).join("");
@@ -653,6 +658,8 @@ const AdminView = (function () {
         <input id="program-expiry" type="date" />
         <br/>
         <input id="program-tagline" placeholder="Tagline for printed cards (optional)" style="margin-top:8px; width:320px;" />
+        <br/>
+        <input id="program-zeffy" placeholder="Zeffy checkout link (optional)" style="margin-top:8px; width:400px;" />
         <button class="primary" data-action="create-program" data-org="${org.id}" style="margin-top:8px;">Create campaign</button>
       </div>
       ${rows}`;
@@ -802,7 +809,8 @@ const AdminView = (function () {
       const cap = document.getElementById("program-cap").value;
       const exp = document.getElementById("program-expiry").value;
       const tagline = document.getElementById("program-tagline").value.trim();
-      if (nameInput.value.trim()) { createProgram(createProgramBtn.dataset.org, nameInput.value.trim(), cap, exp, tagline); nameInput.value = ""; }
+      const zeffyLink = document.getElementById("program-zeffy").value.trim();
+      if (nameInput.value.trim()) { createProgram(createProgramBtn.dataset.org, nameInput.value.trim(), cap, exp, tagline, zeffyLink); nameInput.value = ""; }
     });
     app.querySelectorAll('[data-action="edit-program"]').forEach((el) => {
       el.addEventListener("click", () => { state.editingProgramId = el.dataset.id; render(); });
@@ -817,7 +825,8 @@ const AdminView = (function () {
         const cap = document.getElementById(`edit-program-cap-${id}`).value;
         const exp = document.getElementById(`edit-program-expiry-${id}`).value;
         const tagline = document.getElementById(`edit-program-tagline-${id}`).value.trim();
-        if (name) updateProgram(id, name, cap, exp, tagline);
+        const zeffyLink = document.getElementById(`edit-program-zeffy-${id}`).value.trim();
+        if (name) updateProgram(id, name, cap, exp, tagline, zeffyLink);
       });
     });
   }

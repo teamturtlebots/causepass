@@ -10,6 +10,12 @@ function route() {
     return;
   }
 
+  if (window.location.hash !== "#/admin") {
+    LandingView.init();
+    return;
+  }
+
+  // --- #/admin from here down ---
   if (currentUser === undefined) {
     document.getElementById("app").innerHTML = `<div class="centered">Loading…</div>`;
     return;
@@ -41,5 +47,5 @@ window.addEventListener("hashchange", route);
 // Run once immediately on load — otherwise a customer opening a #/p/TOKEN link
 // would sit waiting on an admin auth check that has nothing to do with them,
 // before the router ever looks at the URL. The auth listener above still
-// re-routes once it resolves, for the admin path.
+// re-routes once it resolves, for the #/admin path.
 route();
