@@ -178,6 +178,21 @@ const AdminView = (function () {
     showToast("Marked as sold");
   }
 
+  async function editPassSale(passId, amount, customerName) {
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed) || parsed < 0) { showToast("Enter a valid sale amount"); return; }
+    // soldAt is deliberately left untouched — a correction shouldn't silently
+    // move which reporting period the funds count toward.
+    // Recorded quietly, not shown anywhere in the UI — cheap to keep for the rare
+    // case you need to check whether/when a number was corrected, without adding
+    // visual clutter to every sold pass in the list.
+    const updates = { soldAmount: parsed, soldEditedAt: Date.now() };
+    if (customerName != null) updates.customerName = customerName.trim();
+    await db.collection("passes").doc(passId).update(updates);
+    state.markingSoldId = null;
+    showToast("Sale updated");
+  }
+
   async function createPasses(programId, customerName, count, soldAmount) {
     if (!programId) { showToast("Choose a campaign first"); return; }
     const n = parseInt(count, 10);
@@ -450,10 +465,10 @@ const AdminView = (function () {
         return `
           <div class="list-item">
             <div style="width:100%;">
-              <div style="font-weight:600; margin-bottom:6px;">Mark ${p.passNumber ? escapeHtml(formatPassNumber(p.passNumber)) : "pass"} as sold</div>
-              <input type="number" step="0.01" min="0" id="mark-sold-amount-${p.id}" placeholder="Sale amount $" style="width:140px;" />
-              ${!p.customerName ? `<input id="mark-sold-customer-${p.id}" placeholder="Customer name (optional)" style="width:200px;" />` : ""}
-              <button class="primary" data-action="confirm-mark-sold" data-id="${p.id}">Confirm</button>
+              <div style="font-weight:600; margin-bottom:6px;">${sold ? "Edit sale for" : "Mark"} ${p.passNumber ? escapeHtml(formatPassNumber(p.passNumber)) : "pass"}${sold ? "" : " as sold"}</div>
+              <input type="number" step="0.01" min="0" id="mark-sold-amount-${p.id}" placeholder="Sale amount $" value="${p.soldAmount ?? ""}" style="width:140px;" />
+              <input id="mark-sold-customer-${p.id}" placeholder="Customer name (optional)" value="${escapeHtml(p.customerName || "")}" style="width:200px;" />
+              <button class="primary" data-action="confirm-mark-sold" data-id="${p.id}">${sold ? "Save" : "Confirm"}</button>
               <button data-action="cancel-mark-sold">Cancel</button>
             </div>
           </div>`;
@@ -472,7 +487,7 @@ const AdminView = (function () {
           <div class="row-flex">
             <a href="${passLink}" target="_blank" rel="noreferrer">View as customer</a>
             <button data-action="copy-link" data-link="${passLink}">Copy link</button>
-            ${!sold ? `<button data-action="start-mark-sold" data-id="${p.id}">Mark as sold</button>` : ""}
+            <button data-action="start-mark-sold" data-id="${p.id}">${sold ? "Edit sale" : "Mark as sold"}</button>
             ${p.status !== "disabled" ? `<button class="danger" data-action="disable-pass" data-token="${p.id}">Disable</button>` : ""}
           </div>
         </div>`;
@@ -696,8 +711,13 @@ const AdminView = (function () {
       el.addEventListener("click", () => {
         const id = el.dataset.id;
         const amount = document.getElementById(`mark-sold-amount-${id}`).value;
-        const nameInput = document.getElementById(`mark-sold-customer-${id}`);
-        markPassSold(id, amount, nameInput ? nameInput.value : "");
+        const customerName = document.getElementById(`mark-sold-customer-${id}`).value;
+        const pass = state.passes.find((p) => p.id === id);
+        if (pass && pass.soldAmount != null) {
+          editPassSale(id, amount, customerName);
+        } else {
+          markPassSold(id, amount, customerName);
+        }
       });
     });
     const passSearchInput = app.querySelector("#pass-search");
