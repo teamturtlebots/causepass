@@ -98,7 +98,7 @@ const LandingView = (function () {
       <div style="max-width:720px; margin:0 auto; padding:28px 16px 60px;">
 
         <div style="text-align:center; margin-bottom:28px;">
-          <div class="display" style="font-size:30px;">CausePass</div>
+          <img src="logo-header.png" alt="CausePass — Local Perks. Greater Impact." style="width:100%; max-width:220px; height:auto; margin-bottom:8px;" />
           <div style="font-size:16px; color:var(--green); font-weight:700; margin-top:2px;">Support Local. Fund a Cause.</div>
           <p style="font-size:14px; color:var(--ink); max-width:480px; margin:16px auto 6px; line-height:1.65;">
             Local businesses provide special offers. Supporters purchase passes to access them.
