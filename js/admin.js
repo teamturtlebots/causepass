@@ -321,12 +321,21 @@ const AdminView = (function () {
   function renderTab(org) {
     if (state.tab === "dashboard") {
       const activeMerchants = state.merchants.filter((m) => !m.archived).length;
+      // Dashboard is deliberately production-only — test campaigns (and anything
+      // tied to them) never count toward these numbers, so what you see here is
+      // always safe to screenshot or report without manually excluding test data.
+      const liveProgramIds = state.programs.filter((p) => !p.isTest).map((p) => p.id);
+      const livePassesCount = state.passes.filter((p) => liveProgramIds.includes(p.programId)).length;
+      const liveRedemptionsCount = state.redemptions.filter((r) => {
+        const offer = state.offers.find((o) => o.id === r.offerId);
+        return offer && liveProgramIds.includes(offer.programId);
+      }).length;
       return `
         <div class="stat-grid">
-          <div class="stat-card"><div class="label">Passes issued</div><div class="value">${state.passes.length}</div></div>
-          <div class="stat-card"><div class="label">Redemptions</div><div class="value">${state.redemptions.length}</div></div>
+          <div class="stat-card"><div class="label">Passes issued</div><div class="value">${livePassesCount}</div></div>
+          <div class="stat-card"><div class="label">Redemptions</div><div class="value">${liveRedemptionsCount}</div></div>
           <div class="stat-card"><div class="label">Active merchants</div><div class="value">${activeMerchants}</div></div>
-          <div class="stat-card"><div class="label">Campaigns</div><div class="value">${state.programs.length}</div></div>
+          <div class="stat-card"><div class="label">Campaigns</div><div class="value">${liveProgramIds.length}</div></div>
         </div>
 
         <div style="font-size:13px; font-weight:700; margin:20px 0 10px;">Filter by campaign, merchant, or date</div>
@@ -346,10 +355,16 @@ const AdminView = (function () {
   function computeReport() {
     const startTs = state.reportStart ? new Date(state.reportStart + "T00:00:00").getTime() : null;
     const endTs = state.reportEnd ? new Date(state.reportEnd + "T23:59:59").getTime() : null;
+    // The Dashboard/Reports screen is production-only — test campaigns are excluded
+    // here unconditionally, not just when "All campaigns" is selected, so there's
+    // no path (including a stale/bad selection) that lets test data slip into a
+    // number you might screenshot or send to someone.
+    const liveProgramIds = state.programs.filter((p) => !p.isTest).map((p) => p.id);
 
     const filtered = state.redemptions.filter((r) => {
       const offer = state.offers.find((o) => o.id === r.offerId);
       if (!offer) return false; // orphaned redemption record with no matching offer — excluded rather than guessed at
+      if (!liveProgramIds.includes(offer.programId)) return false;
       if (state.reportCampaign && offer.programId !== state.reportCampaign) return false;
       if (state.reportMerchant && offer.merchantId !== state.reportMerchant) return false;
       if (startTs && r.timestamp < startTs) return false;
@@ -377,13 +392,14 @@ const AdminView = (function () {
     // January and redeemed in June should count toward January's fundraising total.
     const soldPasses = state.passes.filter((p) => {
       if (p.soldAmount == null) return false;
+      if (!liveProgramIds.includes(p.programId)) return false;
       if (state.reportCampaign && p.programId !== state.reportCampaign) return false;
       if (startTs && (!p.soldAt || p.soldAt < startTs)) return false;
       if (endTs && (!p.soldAt || p.soldAt > endTs)) return false;
       return true;
     });
     const totalFundsRaised = soldPasses.reduce((sum, p) => sum + p.soldAmount, 0);
-    const unsoldCount = state.passes.filter((p) => p.soldAmount == null && (!state.reportCampaign || p.programId === state.reportCampaign)).length;
+    const unsoldCount = state.passes.filter((p) => p.soldAmount == null && liveProgramIds.includes(p.programId) && (!state.reportCampaign || p.programId === state.reportCampaign)).length;
 
     // Merchant-specific insight — only meaningful once a merchant is actually selected:
     // of the passes that redeemed something at this merchant (within the filters above),
@@ -413,7 +429,7 @@ const AdminView = (function () {
 
   function renderReportsTab() {
     const campaignOptions = `<option value="">All campaigns</option>` +
-      state.programs.map((p) => `<option value="${p.id}" ${state.reportCampaign === p.id ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
+      state.programs.filter((p) => !p.isTest).map((p) => `<option value="${p.id}" ${state.reportCampaign === p.id ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
     const merchantOptions = `<option value="">All merchants</option>` +
       state.merchants.map((m) => `<option value="${m.id}" ${state.reportMerchant === m.id ? "selected" : ""}>${escapeHtml(m.name)}${m.archived ? " (archived)" : ""}</option>`).join("");
 
@@ -568,10 +584,12 @@ const AdminView = (function () {
 
     const rows = visible.map((o) => {
       const m = state.merchants.find((mm) => mm.id === o.merchantId);
+      const p = state.programs.find((pp) => pp.id === o.programId);
       if (state.editingOfferId === o.id) {
         const merchantOptions = state.merchants.filter((mm) => !mm.archived || mm.id === o.merchantId);
         return `
           <div class="card">
+            <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">${p && p.isTest ? `<span class="badge amber">TEST</span> ` : ""}Campaign: ${escapeHtml(p && p.name)}</div>
             <select id="edit-offer-merchant-${o.id}">
               ${merchantOptions.map((mm) => `<option value="${mm.id}" ${mm.id === o.merchantId ? "selected" : ""}>${escapeHtml(mm.name)}</option>`).join("")}
             </select>
@@ -588,6 +606,7 @@ const AdminView = (function () {
           </div>`;
       }
       return `<div style="font-size:13px; margin-bottom:6px;">
+        <span style="color:var(--muted);">[${p && p.isTest ? "TEST · " : ""}${escapeHtml(p && p.name)}]</span>
         ${escapeHtml(m && m.name)} — ${escapeHtml(o.terms)} ${discountLabel(o)} ${o.expiresAt ? `(expires ${o.expiresAt})` : ""} — ${o.active ? "active" : "inactive"}
         ${state.showArchivedOffers
           ? `<button data-action="unarchive-offer" data-id="${o.id}">Restore</button>`
