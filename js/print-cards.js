@@ -109,7 +109,20 @@ const PrintCards = (function () {
     });
 
     const safe = (s) => (s || "cards").replace(/[^a-z0-9]+/gi, "-");
-    doc.save(`${safe(org.name)}-${safe(program.name)}-cards.pdf`);
+
+    // Pass-number range makes the filename directly useful — you can tell which
+    // specific, searchable passes are inside without opening the file. A raw
+    // timestamp alone wouldn't tell you that; the date is just added for
+    // at-a-glance recency/sorting on top of it.
+    const numbers = passes.map((p) => p.passNumber).filter((n) => n != null);
+    let rangePart = "";
+    if (numbers.length) {
+      const min = Math.min(...numbers), max = Math.max(...numbers);
+      rangePart = min === max ? `-${formatPassNumber(min)}` : `-${formatPassNumber(min)}-to-${formatPassNumber(max)}`;
+    }
+    const datePart = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, sorts naturally in a file list
+
+    doc.save(`${safe(org.name)}-${safe(program.name)}${rangePart}-${datePart}.pdf`);
   }
 
   return { generate };
