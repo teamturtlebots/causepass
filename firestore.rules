@@ -16,6 +16,14 @@ service cloud.firestore {
         && request.resource.data.redeemedCount == resource.data.redeemedCount + 1;
     }
 
+    // Backs the test-campaign reset feature below — true only if the redemption's
+    // pass belongs to a campaign explicitly flagged isTest, checked server-side.
+    function isTestCampaignRedemption(passToken) {
+      let pass = get(/databases/$(database)/documents/passes/$(passToken)).data;
+      let program = get(/databases/$(database)/documents/programs/$(pass.programId)).data;
+      return program.isTest == true;
+    }
+
     match /organizations/{orgId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -65,7 +73,14 @@ service cloud.firestore {
         && !('amountSpent' in resource.data)
         && request.resource.data.amountSpent is number
         && request.resource.data.amountSpent >= 0;
-      allow delete: if false;
+      // Redemptions are permanent everywhere else in this app — that's what makes
+      // a "Valid redemption" screen trustworthy to a merchant. This is a narrow,
+      // deliberate exception: an admin may delete a redemption ONLY if the pass
+      // it belongs to sits under a campaign explicitly flagged isTest. This is
+      // verified here, server-side, against the real campaign data — not just
+      // a button hidden in the admin UI — so it's structurally impossible to
+      // reset redemption history on any real, live campaign's data.
+      allow delete: if isAdmin() && isTestCampaignRedemption(resource.data.passToken);
     }
 
     match /admins/{uid} {
