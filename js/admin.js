@@ -89,23 +89,25 @@ const AdminView = (function () {
     await db.collection("organizations").add({ name, cause });
     showToast("Organization created");
   }
-  async function createProgram(orgId, name, cap, exp, tagline, zeffyLink) {
+  async function createProgram(orgId, name, cap, exp, tagline, zeffyLink, isTest) {
     await db.collection("programs").add({
       orgId, name,
       maxRedemptions: cap ? parseInt(cap, 10) : null,
       expiresAt: exp || null,
       tagline: tagline || null,
       zeffyLink: zeffyLink || null,
+      isTest: !!isTest,
     });
     showToast("Campaign created");
   }
-  async function updateProgram(id, name, cap, exp, tagline, zeffyLink) {
+  async function updateProgram(id, name, cap, exp, tagline, zeffyLink, isTest) {
     await db.collection("programs").doc(id).update({
       name,
       maxRedemptions: cap ? parseInt(cap, 10) : null,
       expiresAt: exp || null,
       tagline: tagline || null,
       zeffyLink: zeffyLink || null,
+      isTest: !!isTest,
     });
     state.editingProgramId = null;
     showToast("Campaign updated");
@@ -639,6 +641,10 @@ const AdminView = (function () {
             <input id="edit-program-tagline-${p.id}" value="${escapeHtml(p.tagline || "")}" placeholder="Tagline for printed cards (optional)" style="margin-top:8px; width:320px;" />
             <br/>
             <input id="edit-program-zeffy-${p.id}" value="${escapeHtml(p.zeffyLink || "")}" placeholder="Zeffy checkout link (optional)" style="margin-top:8px; width:400px;" />
+            <br/>
+            <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-top:8px;">
+              <input type="checkbox" id="edit-program-istest-${p.id}" ${p.isTest ? "checked" : ""} /> Test campaign (hidden from the public landing page)
+            </label>
             <div style="margin-top:8px;">
               <button class="primary" data-action="save-program" data-id="${p.id}">Save</button>
               <button data-action="cancel-edit-program">Cancel</button>
@@ -647,7 +653,7 @@ const AdminView = (function () {
       }
       return `
         <div style="font-size:13px; margin-bottom:6px;">
-          ${escapeHtml(p.name)} — cap: ${p.maxRedemptions ?? "none"} — expires: ${p.expiresAt || "never"}${p.tagline ? ` — "${escapeHtml(p.tagline)}"` : ""}${p.zeffyLink ? ` — <a href="${escapeHtml(p.zeffyLink)}" target="_blank" rel="noreferrer">Zeffy link ✓</a>` : " — no Zeffy link set"}
+          ${p.isTest ? `<span class="badge amber">TEST</span> ` : ""}${escapeHtml(p.name)} — cap: ${p.maxRedemptions ?? "none"} — expires: ${p.expiresAt || "never"}${p.tagline ? ` — "${escapeHtml(p.tagline)}"` : ""}${p.zeffyLink ? ` — <a href="${escapeHtml(p.zeffyLink)}" target="_blank" rel="noreferrer">Zeffy link ✓</a>` : " — no Zeffy link set"}
           <button data-action="edit-program" data-id="${p.id}">Edit</button>
         </div>`;
     }).join("");
@@ -660,6 +666,10 @@ const AdminView = (function () {
         <input id="program-tagline" placeholder="Tagline for printed cards (optional)" style="margin-top:8px; width:320px;" />
         <br/>
         <input id="program-zeffy" placeholder="Zeffy checkout link (optional)" style="margin-top:8px; width:400px;" />
+        <br/>
+        <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-top:8px;">
+          <input type="checkbox" id="program-is-test" /> Test campaign (hidden from the public landing page)
+        </label>
         <button class="primary" data-action="create-program" data-org="${org.id}" style="margin-top:8px;">Create campaign</button>
       </div>
       ${rows}`;
@@ -810,7 +820,8 @@ const AdminView = (function () {
       const exp = document.getElementById("program-expiry").value;
       const tagline = document.getElementById("program-tagline").value.trim();
       const zeffyLink = document.getElementById("program-zeffy").value.trim();
-      if (nameInput.value.trim()) { createProgram(createProgramBtn.dataset.org, nameInput.value.trim(), cap, exp, tagline, zeffyLink); nameInput.value = ""; }
+      const isTest = document.getElementById("program-is-test").checked;
+      if (nameInput.value.trim()) { createProgram(createProgramBtn.dataset.org, nameInput.value.trim(), cap, exp, tagline, zeffyLink, isTest); nameInput.value = ""; }
     });
     app.querySelectorAll('[data-action="edit-program"]').forEach((el) => {
       el.addEventListener("click", () => { state.editingProgramId = el.dataset.id; render(); });
@@ -826,7 +837,8 @@ const AdminView = (function () {
         const exp = document.getElementById(`edit-program-expiry-${id}`).value;
         const tagline = document.getElementById(`edit-program-tagline-${id}`).value.trim();
         const zeffyLink = document.getElementById(`edit-program-zeffy-${id}`).value.trim();
-        if (name) updateProgram(id, name, cap, exp, tagline, zeffyLink);
+        const isTest = document.getElementById(`edit-program-istest-${id}`).checked;
+        if (name) updateProgram(id, name, cap, exp, tagline, zeffyLink, isTest);
       });
     });
   }

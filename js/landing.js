@@ -115,10 +115,12 @@ const LandingView = (function () {
         <div id="supporters-section" style="margin-bottom:44px;">
           <div class="display" style="font-size:20px; text-align:center; margin-bottom:4px;">For Supporters</div>
           <div style="text-align:center; font-size:13px; color:var(--muted); margin-bottom:20px;">Save at local businesses while supporting STEM.</div>
-          ${state.programs.length
-            ? state.programs.map(renderProgramBlock).join("")
-            : `<div style="text-align:center; font-size:13px; color:var(--muted);">Details coming soon.</div>`
-          }
+          ${(() => {
+            const liveCampaigns = state.programs.filter((p) => !p.isTest);
+            return liveCampaigns.length
+              ? liveCampaigns.map(renderProgramBlock).join("")
+              : `<div style="text-align:center; font-size:13px; color:var(--muted);">Details coming soon.</div>`;
+          })()}
         </div>
 
         <div id="restaurants-section" style="margin-bottom:44px;">
