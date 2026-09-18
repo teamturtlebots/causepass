@@ -39,6 +39,9 @@ const LandingView = (function () {
     const offers = state.offers.filter((o) => o.programId === program.id);
     const merchantIds = [...new Set(offers.map((o) => o.merchantId))];
     const org = state.org;
+    // Max possible savings if every offer on this pass got used — same "Save up to
+    // $X" framing as the printed cards, computed live so it's never stale/hand-typed.
+    const potentialSavings = offers.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
 
     const offerCards = offers.map((o) => {
       const m = state.merchants.find((mm) => mm.id === o.merchantId);
@@ -71,12 +74,15 @@ const LandingView = (function () {
           <div style="font-size:14px; color:#E9F0FA; margin-top:6px;">${escapeHtml(program.name)}</div>
           ${program.tagline ? `<div style="font-size:12px; color:#9DBBDD; font-style:italic; margin-top:2px;">${escapeHtml(program.tagline)}</div>` : ""}
           <div style="font-size:12px; color:#9DBBDD; margin-top:10px;">${merchantIds.length} partner business${merchantIds.length === 1 ? "" : "es"} · ${offers.length} active offer${offers.length === 1 ? "" : "s"}</div>
+          ${potentialSavings > 0 ? `<div style="font-size:14px; color:#8FE0AA; font-weight:700; margin-top:4px;">Save up to $${potentialSavings.toFixed(2)}</div>` : ""}
         </div>
 
-        <div class="stat-grid" style="margin-bottom:16px;">
-          <div class="stat-card"><div class="label">1</div><div style="font-size:13px; font-weight:600;">Browse offers</div></div>
-          <div class="stat-card"><div class="label">2</div><div style="font-size:13px; font-weight:600;">Get your pass</div></div>
-          <div class="stat-card"><div class="label">3</div><div style="font-size:13px; font-weight:600;">Redeem & save</div></div>
+        <div class="steps-flow" style="margin-bottom:16px;">
+          <div class="step-item"><div class="step-num">1</div><div class="step-label">Review Offers</div></div>
+          <div class="step-arrow">→</div>
+          <div class="step-item"><div class="step-num">2</div><div class="step-label">Get a Pass</div></div>
+          <div class="step-arrow">→</div>
+          <div class="step-item"><div class="step-num">3</div><div class="step-label">Redeem & Save</div></div>
         </div>
 
         <div style="font-size:12px; color:var(--muted); margin:0 2px 8px;">Participating businesses</div>
