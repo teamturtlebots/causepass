@@ -91,6 +91,8 @@ const LandingView = (function () {
   function render() {
     const app = document.getElementById("app");
     const org = state.org;
+    const videoProgram = state.programs.find((p) => !p.isTest && p.videoUrl);
+    const videoId = videoProgram ? extractYouTubeId(videoProgram.videoUrl) : null;
 
     app.innerHTML = `
       <div style="max-width:720px; margin:0 auto; padding:28px 16px 60px;">
@@ -106,6 +108,18 @@ const LandingView = (function () {
             Created by <a href="https://www.teamturtlebots.org" target="_blank" rel="noreferrer">${escapeHtml(org ? org.name : "Team Turtlebots")}</a>
           </div>
         </div>
+
+        ${videoId ? `
+          <div style="max-width:280px; margin:0 auto 28px; aspect-ratio:9/16; border-radius:16px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,0.12);">
+            <iframe
+              src="https://www.youtube.com/embed/${videoId}"
+              title="How CausePass works"
+              style="width:100%; height:100%; border:none; display:block;"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen>
+            </iframe>
+          </div>
+        ` : ""}
 
         <div class="row-flex" style="justify-content:center; margin-bottom:36px;">
           <button class="primary" data-action="scroll-to" data-target="supporters-section">I'm a Supporter</button>

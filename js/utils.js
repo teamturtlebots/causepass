@@ -33,3 +33,18 @@ function getCustomerTokenFromHash() {
 function formatPassNumber(n) {
   return "CP-" + String(n).padStart(4, "0");
 }
+
+// Pulls the video ID out of whatever YouTube URL format someone pastes in —
+// a Shorts link, a regular watch link, or a shortened youtu.be link — so
+// swapping the link later doesn't depend on getting the format exactly right.
+function extractYouTubeId(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1).split("/")[0] || null;
+    if (u.pathname.startsWith("/shorts/")) return u.pathname.split("/shorts/")[1].split("/")[0] || null;
+    if (u.pathname.startsWith("/embed/")) return u.pathname.split("/embed/")[1].split("/")[0] || null;
+    if (u.searchParams.get("v")) return u.searchParams.get("v");
+  } catch (e) {}
+  return null;
+}
