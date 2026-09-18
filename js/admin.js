@@ -56,6 +56,7 @@ const AdminView = (function () {
       showArchivedMerchants: false, showArchivedOffers: false,
       batchBusy: false, batchProgress: "",
       reportCampaign: "", reportMerchant: "", reportStart: "", reportEnd: "",
+      markingSoldId: null,
     };
 
     subscribe("organizations", "orgs");
@@ -148,7 +149,7 @@ const AdminView = (function () {
   // and the batch generator below — a batch-created pass is not structurally
   // different from a one-off pass, it just skips asking for a customer name
   // upfront (these are printed blank and sold in person).
-  async function createOnePass(programId, customerName) {
+  async function createOnePass(programId, customerName, soldAmount) {
     const t = randomToken();
     const counterRef = db.collection("counters").doc("passes");
     const passRef = db.collection("passes").doc(t);
@@ -159,16 +160,29 @@ const AdminView = (function () {
       tx.set(passRef, {
         programId, customerName, status: "active", redeemedCount: 0, createdAt: Date.now(),
         passNumber: next,
+        soldAmount: soldAmount != null ? soldAmount : null,
+        soldAt: soldAmount != null ? Date.now() : null,
       });
       return next;
     });
     return { id: t, passNumber };
   }
 
-  async function createPasses(programId, customerName, count) {
+  async function markPassSold(passId, amount, customerName) {
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed) || parsed < 0) { showToast("Enter a valid sale amount"); return; }
+    const updates = { soldAmount: parsed, soldAt: Date.now() };
+    if (customerName && customerName.trim()) updates.customerName = customerName.trim();
+    await db.collection("passes").doc(passId).update(updates);
+    state.markingSoldId = null;
+    showToast("Marked as sold");
+  }
+
+  async function createPasses(programId, customerName, count, soldAmount) {
     if (!programId) { showToast("Choose a campaign first"); return; }
     const n = parseInt(count, 10);
     if (!n || n < 1 || n > 40) { showToast("Enter a number between 1 and 40"); return; }
+    const parsedSoldAmount = soldAmount ? parseFloat(soldAmount) : null;
 
     const program = state.programs.find((p) => p.id === programId);
     const org = state.orgs[0];
@@ -183,7 +197,7 @@ const AdminView = (function () {
       // them one at a time keeps pass numbers assigned in a clean, predictable
       // order instead of racing many transactions against each other at once.
       for (let i = 0; i < n; i++) {
-        const pass = await createOnePass(programId, customerName || "");
+        const pass = await createOnePass(programId, customerName || "", parsedSoldAmount);
         created.push(pass);
         state.batchProgress = "Creating passes… (" + (i + 1) + " / " + n + ")";
         render();
@@ -338,7 +352,43 @@ const AdminView = (function () {
       }
     });
 
-    return { count: filtered.length, totalSavings, totalRevenue, reportedCount, estimatedCount, unknownCount };
+    // Funds raised (pass sales) — filtered by campaign + the SAME date range, but by
+    // when the pass was sold (soldAt), not by redemption activity. A pass sold in
+    // January and redeemed in June should count toward January's fundraising total.
+    const soldPasses = state.passes.filter((p) => {
+      if (p.soldAmount == null) return false;
+      if (state.reportCampaign && p.programId !== state.reportCampaign) return false;
+      if (startTs && (!p.soldAt || p.soldAt < startTs)) return false;
+      if (endTs && (!p.soldAt || p.soldAt > endTs)) return false;
+      return true;
+    });
+    const totalFundsRaised = soldPasses.reduce((sum, p) => sum + p.soldAmount, 0);
+    const unsoldCount = state.passes.filter((p) => p.soldAmount == null && (!state.reportCampaign || p.programId === state.reportCampaign)).length;
+
+    // Merchant-specific insight — only meaningful once a merchant is actually selected:
+    // of the passes that redeemed something at this merchant (within the filters above),
+    // how much fundraising value do they represent? This is soft attribution (a pass can
+    // support several merchants), not a revenue split, so it's kept separate from the
+    // always-accurate totalFundsRaised above rather than replacing it.
+    let merchantInsightFunds = null, merchantInsightPassCount = 0, merchantInsightSoldCount = 0;
+    if (state.reportMerchant) {
+      const uniquePassIds = [...new Set(filtered.map((r) => r.passToken))];
+      merchantInsightPassCount = uniquePassIds.length;
+      merchantInsightFunds = 0;
+      uniquePassIds.forEach((id) => {
+        const pass = state.passes.find((p) => p.id === id);
+        if (pass && pass.soldAmount != null) {
+          merchantInsightFunds += pass.soldAmount;
+          merchantInsightSoldCount++;
+        }
+      });
+    }
+
+    return {
+      count: filtered.length, totalSavings, totalRevenue, reportedCount, estimatedCount, unknownCount,
+      totalFundsRaised, soldCount: soldPasses.length, unsoldCount,
+      merchantInsightFunds, merchantInsightPassCount, merchantInsightSoldCount,
+    };
   }
 
   function renderReportsTab() {
@@ -361,17 +411,27 @@ const AdminView = (function () {
       </div>
 
       <div class="stat-grid">
+        <div class="stat-card"><div class="label">Funds raised</div><div class="value">$${r.totalFundsRaised.toFixed(2)}</div></div>
         <div class="stat-card"><div class="label">Redemptions</div><div class="value">${r.count}</div></div>
         <div class="stat-card"><div class="label">Total savings given</div><div class="value">$${r.totalSavings.toFixed(2)}</div></div>
         <div class="stat-card"><div class="label">Estimated revenue driven</div><div class="value">$${r.totalRevenue.toFixed(2)}</div></div>
       </div>
 
       <div style="font-size:12px; color:var(--muted); margin-top:12px;">
+        Funds raised: ${r.soldCount} pass${r.soldCount === 1 ? "" : "es"} sold in this range, ${r.unsoldCount} still unsold inventory (based on when each pass was <em>sold</em>, not redeemed).
+      </div>
+      <div style="font-size:12px; color:var(--muted); margin-top:4px;">
         ${r.count === 0
           ? "No redemptions match these filters."
           : `Revenue figure: ${r.reportedCount} redemption${r.reportedCount === 1 ? "" : "s"} with a customer-reported purchase amount, ${r.estimatedCount} estimated from the offer's minimum purchase, ${r.unknownCount} with no amount available either way.`
         }
-      </div>`;
+      </div>
+
+      ${state.reportMerchant ? `
+        <div class="banner" style="background:#E9F5EE; color:#1F6538; margin-top:14px;">
+          💡 Insight: ${r.merchantInsightPassCount} distinct pass${r.merchantInsightPassCount === 1 ? "" : "es"} redeemed something at this merchant in this range — of those, ${r.merchantInsightSoldCount} were sold, together raising $${r.merchantInsightFunds.toFixed(2)}. (Soft attribution — a pass can support more than one merchant, so this isn't a strict revenue split.)
+        </div>
+      ` : ""}`;
   }
 
   function renderPassesTab() {
@@ -384,6 +444,21 @@ const AdminView = (function () {
       const program = state.programs.find((pr) => pr.id === p.programId);
       const used = state.redemptions.filter((r) => r.passToken === p.id).length;
       const passLink = window.location.origin + window.location.pathname + "#/p/" + p.id;
+      const sold = p.soldAmount != null;
+
+      if (state.markingSoldId === p.id) {
+        return `
+          <div class="list-item">
+            <div style="width:100%;">
+              <div style="font-weight:600; margin-bottom:6px;">Mark ${p.passNumber ? escapeHtml(formatPassNumber(p.passNumber)) : "pass"} as sold</div>
+              <input type="number" step="0.01" min="0" id="mark-sold-amount-${p.id}" placeholder="Sale amount $" style="width:140px;" />
+              ${!p.customerName ? `<input id="mark-sold-customer-${p.id}" placeholder="Customer name (optional)" style="width:200px;" />` : ""}
+              <button class="primary" data-action="confirm-mark-sold" data-id="${p.id}">Confirm</button>
+              <button data-action="cancel-mark-sold">Cancel</button>
+            </div>
+          </div>`;
+      }
+
       return `
         <div class="list-item">
           <div style="min-width:140px;">
@@ -392,9 +467,11 @@ const AdminView = (function () {
           </div>
           <div class="mono">${passLink}</div>
           <div>${used}${program && program.maxRedemptions ? ` / ${program.maxRedemptions}` : ""} redeemed</div>
+          <span class="badge ${sold ? "green" : "grey"}">${sold ? "Sold $" + p.soldAmount.toFixed(2) : "Unsold"}</span>
           <span class="badge ${p.status === "disabled" ? "red" : "green"}">${p.status === "disabled" ? "Disabled" : "Active"}</span>
           <div class="row-flex">
             <a href="${passLink}" target="_blank" rel="noreferrer">View as customer</a>
+            ${!sold ? `<button data-action="start-mark-sold" data-id="${p.id}">Mark as sold</button>` : ""}
             ${p.status !== "disabled" ? `<button class="danger" data-action="disable-pass" data-token="${p.id}">Disable</button>` : ""}
           </div>
         </div>`;
@@ -407,6 +484,8 @@ const AdminView = (function () {
         <select id="create-program">${state.programs.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>
         <input id="create-customer" placeholder="Customer name (optional)" />
         <input id="create-count" type="number" min="1" max="40" placeholder="How many? (max 40)" style="width:150px;" />
+        <input id="create-sold-amount" type="number" step="0.01" min="0" placeholder="Sale amount $ (optional)" style="width:170px;" />
+        <div style="font-size:11px; color:var(--muted); margin:6px 0;">Leave sale amount blank for unsold inventory to print now and sell later — mark it sold from the list below once it's actually purchased.</div>
         <button class="primary" data-action="create-passes" ${state.batchBusy ? "disabled" : ""}>${state.batchBusy ? "Working…" : "Create & download PDF"}</button>
         ${state.batchProgress ? `<div style="font-size:13px; color:var(--muted); margin-top:8px;">${escapeHtml(state.batchProgress)}</div>` : ""}
       </div>
@@ -590,10 +669,25 @@ const AdminView = (function () {
       const programId = document.getElementById("create-program").value;
       const customerName = document.getElementById("create-customer").value.trim();
       const count = document.getElementById("create-count").value;
-      createPasses(programId, customerName, count);
+      const soldAmount = document.getElementById("create-sold-amount").value;
+      createPasses(programId, customerName, count, soldAmount);
     });
     app.querySelectorAll('[data-action="disable-pass"]').forEach((el) => {
       el.addEventListener("click", () => disablePass(el.dataset.token));
+    });
+    app.querySelectorAll('[data-action="start-mark-sold"]').forEach((el) => {
+      el.addEventListener("click", () => { state.markingSoldId = el.dataset.id; render(); });
+    });
+    app.querySelectorAll('[data-action="cancel-mark-sold"]').forEach((el) => {
+      el.addEventListener("click", () => { state.markingSoldId = null; render(); });
+    });
+    app.querySelectorAll('[data-action="confirm-mark-sold"]').forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = el.dataset.id;
+        const amount = document.getElementById(`mark-sold-amount-${id}`).value;
+        const nameInput = document.getElementById(`mark-sold-customer-${id}`);
+        markPassSold(id, amount, nameInput ? nameInput.value : "");
+      });
     });
     const passSearchInput = app.querySelector("#pass-search");
     if (passSearchInput) passSearchInput.addEventListener("input", () => { state.passSearch = passSearchInput.value; render(); });
