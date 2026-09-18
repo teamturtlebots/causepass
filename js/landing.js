@@ -4,13 +4,13 @@
 // link with no account). Visible to anyone who lands on the site's root URL.
 
 const LandingView = (function () {
-  let state = { org: null, programs: [], merchants: [], offers: [] };
+  let state = { org: null, programs: [], merchants: [], offers: [], impactAnimated: false };
   let unsubscribers = [];
 
   function init() {
     unsubscribers.forEach((u) => u());
     unsubscribers = [];
-    state = { org: null, programs: [], merchants: [], offers: [] };
+    state = { org: null, programs: [], merchants: [], offers: [], impactAnimated: false };
     render();
 
     unsubscribers.push(db.collection("organizations").onSnapshot((snap) => {
@@ -38,11 +38,12 @@ const LandingView = (function () {
   function renderProgramBlock(program) {
     const offers = state.offers.filter((o) => o.programId === program.id);
     const merchantIds = [...new Set(offers.map((o) => o.merchantId))];
+    const org = state.org;
 
     const offerCards = offers.map((o) => {
       const m = state.merchants.find((mm) => mm.id === o.merchantId);
       return `
-        <div class="offer-card" style="text-align:left;">
+        <div class="offer-card">
           <div class="offer-row">
             <div class="offer-left">
               <div class="avatar">${escapeHtml(initials(m && m.name))}</div>
@@ -56,22 +57,30 @@ const LandingView = (function () {
     }).join("");
 
     const ctaHtml = program.zeffyLink
-      ? `<a href="${escapeHtml(program.zeffyLink)}" target="_blank" rel="noreferrer"><button class="primary" style="width:100%; margin-top:6px;">Get a Pass</button></a>`
-      : `<button disabled style="width:100%; margin-top:6px;">Get a Pass (coming soon)</button>`;
+      ? `<a href="${escapeHtml(program.zeffyLink)}" target="_blank" rel="noreferrer"><button class="primary" style="width:100%; margin-top:4px;">Get a Pass</button></a>`
+      : `<button disabled style="width:100%; margin-top:4px;">Get a Pass (coming soon)</button>`;
 
+    // Deliberately styled to match the real pass page exactly — same navy hero,
+    // same offer-card list — so visiting the landing page previews exactly
+    // what buying a pass actually looks like, not a separate marketing skin.
     return `
-      <div class="card" style="text-align:center; margin-bottom:20px;">
-        <div class="display" style="font-size:19px;">${escapeHtml(program.name)}</div>
-        ${program.tagline ? `<div style="color:var(--green); font-style:italic; font-size:13px; margin-top:2px;">${escapeHtml(program.tagline)}</div>` : ""}
-        <div style="font-size:13px; color:var(--muted); margin:10px 0 16px;">${merchantIds.length} partner business${merchantIds.length === 1 ? "" : "es"} · ${offers.length} active offer${offers.length === 1 ? "" : "s"}</div>
+      <div style="margin-bottom:28px;">
+        <div class="pass-hero" style="text-align:center;">
+          <div style="font-size:11px; color:#9DBBDD; text-transform:uppercase; letter-spacing:0.5px;">Supporting</div>
+          <div style="font-size:20px; font-weight:700;">${escapeHtml(org && org.cause)}</div>
+          <div style="font-size:14px; color:#E9F0FA; margin-top:6px;">${escapeHtml(program.name)}</div>
+          ${program.tagline ? `<div style="font-size:12px; color:#9DBBDD; font-style:italic; margin-top:2px;">${escapeHtml(program.tagline)}</div>` : ""}
+          <div style="font-size:12px; color:#9DBBDD; margin-top:10px;">${merchantIds.length} partner business${merchantIds.length === 1 ? "" : "es"} · ${offers.length} active offer${offers.length === 1 ? "" : "s"}</div>
+        </div>
 
-        <div class="stat-grid" style="margin-bottom:18px;">
+        <div class="stat-grid" style="margin-bottom:16px;">
           <div class="stat-card"><div class="label">1</div><div style="font-size:13px; font-weight:600;">Browse offers</div></div>
           <div class="stat-card"><div class="label">2</div><div style="font-size:13px; font-weight:600;">Get your pass</div></div>
           <div class="stat-card"><div class="label">3</div><div style="font-size:13px; font-weight:600;">Redeem & save</div></div>
         </div>
 
-        <div style="text-align:left; display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+        <div style="font-size:12px; color:var(--muted); margin:0 2px 8px;">Participating businesses</div>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
           ${offerCards || `<div style="font-size:13px; color:var(--muted); text-align:center;">Partner businesses coming soon.</div>`}
         </div>
 
@@ -116,6 +125,12 @@ const LandingView = (function () {
           <div class="display" style="font-size:20px; text-align:center; margin-bottom:4px;">For Restaurants</div>
           <div style="text-align:center; font-size:13px; color:var(--muted); margin-bottom:20px;">Bring local families through your doors — support youth STEM with no upfront cost.</div>
 
+          <div style="background:var(--green); border-radius:16px; padding:16px 18px; margin-bottom:16px; color:#fff; text-align:center;">
+            <div style="font-size:11px; color:#D6F0DF; text-transform:uppercase; letter-spacing:0.5px;">Become a</div>
+            <div style="font-size:20px; font-weight:700;">Founding CausePass Partner</div>
+            <div style="font-size:13px; color:#EAF7ED; margin-top:6px;">No upfront cost · No app or POS integration required</div>
+          </div>
+
           <div class="card" style="margin-bottom:16px;">
             <div class="stat-grid" style="margin-bottom:16px;">
               <div class="stat-card"><div class="label">1 · You Choose</div><div style="font-size:12px;">A simple offer, e.g. $5 off $25</div></div>
@@ -137,10 +152,15 @@ const LandingView = (function () {
           </div>
         </div>
 
-        <div style="text-align:center; margin-bottom:28px;">
+        <div id="impact-section" style="text-align:center; margin-bottom:28px;">
           <div class="display" style="font-size:18px; margin-bottom:10px;">Our Impact</div>
-          <div style="font-size:13px; color:var(--muted);">1.1K+ YouTube Subscribers · 500+ Instagram Followers · 100+ Newsletter Subscribers</div>
-          <div style="font-size:13px; color:var(--muted); margin-top:4px;">Active in local community events</div>
+          <div style="font-size:22px; font-weight:700; color:var(--green);"><span id="count-patrons" data-count="50000">0</span>+ patrons reached</div>
+          <div style="font-size:13px; color:var(--muted); margin-top:2px;">through local community events</div>
+          <div style="font-size:13px; color:var(--muted); margin-top:10px;">
+            <span id="count-youtube" data-count="1100">0</span>+ YouTube Subscribers ·
+            <span id="count-instagram" data-count="500">0</span>+ Instagram Followers ·
+            <span id="count-newsletter" data-count="100">0</span>+ Newsletter Subscribers
+          </div>
         </div>
 
         <div style="text-align:center; font-size:11px; color:var(--muted); border-top:1px solid var(--line); padding-top:16px;">
@@ -162,6 +182,46 @@ const LandingView = (function () {
         if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
+    setupImpactCounters();
+  }
+
+  // Counts each number up from 0 once it scrolls into view. Guarded by
+  // state.impactAnimated (not a DOM flag) because this app re-renders the
+  // whole page on every Firestore update elsewhere — the DOM node showing
+  // these numbers gets destroyed and recreated each time, so a flag stored
+  // on the element itself wouldn't survive; tracking it in `state` does.
+  function setupImpactCounters() {
+    if (state.impactAnimated) {
+      // Already played once this visit — just show the final numbers directly, no re-animate.
+      document.querySelectorAll("[data-count]").forEach((el) => {
+        el.textContent = Number(el.dataset.count).toLocaleString();
+      });
+      return;
+    }
+    const section = document.getElementById("impact-section");
+    if (!section) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        state.impactAnimated = true;
+        section.querySelectorAll("[data-count]").forEach((el) => animateCount(el, Number(el.dataset.count)));
+      });
+    }, { threshold: 0.4 });
+    observer.observe(section);
+  }
+
+  function animateCount(el, target) {
+    const duration = 1200;
+    const start = performance.now();
+    function tick(now) {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out — fast start, gentle finish
+      el.textContent = Math.round(eased * target).toLocaleString();
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
   }
 
   return { init };
