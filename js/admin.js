@@ -114,12 +114,12 @@ const AdminView = (function () {
     state.editingProgramId = null;
     showToast("Campaign updated");
   }
-  async function createMerchant(orgId, name) {
-    await db.collection("merchants").add({ orgId, name, archived: false });
+  async function createMerchant(orgId, name, address) {
+    await db.collection("merchants").add({ orgId, name, address: address || null, archived: false });
     showToast("Merchant added");
   }
-  async function updateMerchant(id, name) {
-    await db.collection("merchants").doc(id).update({ name });
+  async function updateMerchant(id, name, address) {
+    await db.collection("merchants").doc(id).update({ name, address: address || null });
     state.editingMerchantId = null;
     showToast("Merchant updated");
   }
@@ -565,6 +565,7 @@ const AdminView = (function () {
         return `
           <div class="card" style="display:inline-block; margin-right:8px; margin-bottom:8px; min-width:220px;">
             <input id="edit-merchant-name-${m.id}" value="${escapeHtml(m.name)}" style="margin-bottom:8px; width:100%;" />
+            <input id="edit-merchant-address-${m.id}" value="${escapeHtml(m.address || "")}" placeholder="Street address (for the map link)" style="margin-bottom:8px; width:100%;" />
             <button class="primary" data-action="save-merchant" data-id="${m.id}">Save</button>
             <button data-action="cancel-edit-merchant">Cancel</button>
           </div>`;
@@ -572,6 +573,7 @@ const AdminView = (function () {
       return `
         <div style="display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:6px 10px; margin-right:8px; margin-bottom:8px;">
           <span style="font-size:12px; font-weight:700;">${escapeHtml(initials(m.name))}</span> ${escapeHtml(m.name)}
+          ${m.address ? `<a href="${escapeHtml(mapsUrl(m.address, m.name))}" target="_blank" rel="noreferrer" title="${escapeHtml(m.address)}" style="font-size:12px; text-decoration:none;">📍</a>` : ""}
           ${state.showArchivedMerchants
             ? `<button data-action="unarchive-merchant" data-id="${m.id}" style="padding:4px 8px; font-size:12px;">Restore</button>`
             : `<button data-action="edit-merchant" data-id="${m.id}" style="padding:4px 8px; font-size:12px;">Edit</button>
@@ -583,6 +585,7 @@ const AdminView = (function () {
     return `
       <div style="margin-bottom:14px;">
         <input id="merchant-name" placeholder="Merchant name" />
+        <input id="merchant-address" placeholder="Street address (for the map link)" style="min-width:240px;" />
         <button class="primary" data-action="create-merchant" data-org="${org.id}">Add merchant</button>
       </div>
       <div class="row-flex" style="margin-bottom:12px;">
@@ -791,7 +794,11 @@ const AdminView = (function () {
     const createMerchantBtn = app.querySelector('[data-action="create-merchant"]');
     if (createMerchantBtn) createMerchantBtn.addEventListener("click", () => {
       const input = document.getElementById("merchant-name");
-      if (input.value.trim()) { createMerchant(createMerchantBtn.dataset.org, input.value.trim()); input.value = ""; }
+      const addressInput = document.getElementById("merchant-address");
+      if (input.value.trim()) {
+        createMerchant(createMerchantBtn.dataset.org, input.value.trim(), addressInput.value.trim());
+        input.value = ""; addressInput.value = "";
+      }
     });
     const merchantSearchInput = app.querySelector("#merchant-search");
     if (merchantSearchInput) merchantSearchInput.addEventListener("input", () => { state.merchantSearch = merchantSearchInput.value; render(); });
@@ -807,7 +814,8 @@ const AdminView = (function () {
       el.addEventListener("click", () => {
         const id = el.dataset.id;
         const val = document.getElementById(`edit-merchant-name-${id}`).value.trim();
-        if (val) updateMerchant(id, val);
+        const addr = document.getElementById(`edit-merchant-address-${id}`).value.trim();
+        if (val) updateMerchant(id, val, addr);
       });
     });
     app.querySelectorAll('[data-action="archive-merchant"]').forEach((el) => {

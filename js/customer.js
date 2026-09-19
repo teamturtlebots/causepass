@@ -195,6 +195,7 @@ const CustomerView = (function () {
               <div>
                 <div style="font-weight:700;">${escapeHtml(merchant && merchant.name)}</div>
                 <div style="font-size:13px; color:var(--muted);">${escapeHtml(offer.terms)}</div>
+                ${directionsLinkHtml(merchant)}
               </div>
             </div>
             <span class="badge ${redeemed ? "grey" : "green"}">${redeemed ? "Redeemed" : "Available"}</span>
