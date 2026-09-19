@@ -49,13 +49,12 @@ function extractYouTubeId(url) {
   return null;
 }
 
-// Builds a plain Google Maps link from a business name + street address. Searching the name
-// together with the address makes Google Maps open the restaurant's own listing (hours, photos,
-// reviews) when it has one. No API key or setup needed. Returns "" if there's no address.
-function mapsUrl(address, name) {
+// Builds a plain Google Maps link from a street address. Opens Google Maps with just the
+// address searched (or the Maps app on a phone). No API key or setup needed.
+// Returns "" if there's no address.
+function mapsUrl(address) {
   if (!address) return "";
-  const query = name ? name + " " + address : address;
-  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query);
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address);
 }
 
 // Address text plus a small "📍 Directions" button for a merchant, or "" if no address is saved.
@@ -64,7 +63,7 @@ function directionsLinkHtml(merchant) {
   if (!merchant || !merchant.address) return "";
   return `
     <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(merchant.address)}</div>
-    <a href="${escapeHtml(mapsUrl(merchant.address, merchant.name))}" target="_blank" rel="noreferrer" style="text-decoration:none;">
+    <a href="${escapeHtml(mapsUrl(merchant.address))}" target="_blank" rel="noreferrer" style="text-decoration:none;">
       <button type="button" style="margin-top:6px; font-size:12px; padding:6px 10px;">📍 Directions</button>
     </a>`;
 }
