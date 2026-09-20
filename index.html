@@ -5,8 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CausePass</title>
 
-<!-- Makes the site installable to a home screen (Android/Chrome reads this) -->
-<link rel="manifest" href="manifest.json" />
+<!-- Makes the site installable to a home screen (Android/Chrome reads this).
+     Skipped on customer pass links (#/p/...): when a manifest is present, phones save
+     its start_url (the site root) instead of the page you were on, so a customer would
+     get the landing page rather than their pass. With no manifest on a pass link,
+     "Add to Home Screen" saves the pass link itself. Landing page and admin unchanged. -->
+<script>
+  if (!/^#\/p\//.test(window.location.hash)) {
+    var manifestLink = document.createElement("link");
+    manifestLink.rel = "manifest";
+    manifestLink.href = "manifest.json";
+    document.head.appendChild(manifestLink);
+  }
+</script>
 <meta name="theme-color" content="#1F3A5F" />
 
 <!-- iOS Safari doesn't fully use the manifest above, so it needs these separately -->
