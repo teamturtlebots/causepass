@@ -419,7 +419,7 @@ const CustomerView = (function () {
              <div class="rv-timer" id="rv-timer">${mins}:${String(secs).padStart(2, "0")}</div>
            </div>
            <div class="rv-bar"><div class="rv-bar-fill" id="rv-bar-fill" style="width:${Math.round((remaining / LIVE_WINDOW_MS) * 100)}%"></div></div>
-           <div class="rv-live-note">Live verification: this redemption is happening now</div>
+           <div class="rv-live-note">Live verification \u00b7 happening now</div>
          </div>`
       : variant === "closed"
         ? `<div class="rv-warn">
