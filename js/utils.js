@@ -67,7 +67,7 @@ function directionsLinkHtml(merchant, compact) {
   if (!merchant || !merchant.address) return "";
   const url = escapeHtml(mapsUrl(merchant.address, merchant.name));
   if (compact) {
-    return `<a href="${url}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:4px; font-size:12px; text-decoration:none;">📍 Directions</a>`;
+    return `<a href="${url}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:4px; font-size:12px; font-weight:600; color:var(--navy); text-decoration:none;">📍 Directions</a>`;
   }
   return `
     <div style="font-size:13px; color:var(--muted); margin-top:2px;">${escapeHtml(merchant.address)}</div>
