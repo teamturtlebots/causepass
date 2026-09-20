@@ -67,10 +67,10 @@ service cloud.firestore {
         && redemptionId == (request.resource.data.passToken + '_' + request.resource.data.offerId);
       // Discount savings are written once, at creation, as part of the redemption doc itself
       // (see the "create" rule above) — no separate permission needed for that.
-      // This just lets the customer optionally add a purchase total afterward, once, for
-      // merchant-impact reporting — it never changes what the customer is told they saved.
+      // This lets the customer optionally add a purchase total afterward, and correct it later
+      // if they made a typo. For merchant-impact reporting only — it never changes what the
+      // customer is told they saved, and it is the ONLY field a customer can ever change.
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amountSpent'])
-        && !('amountSpent' in resource.data)
         && request.resource.data.amountSpent is number
         && request.resource.data.amountSpent >= 0;
       // Redemptions are permanent everywhere else in this app — that's what makes
