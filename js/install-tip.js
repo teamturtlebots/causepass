@@ -1,6 +1,9 @@
-// ================= "ADD TO HOME SCREEN" TIP (customer pass page only) =================
-// A small, dismissible banner that shows a customer how to put their pass on their phone's
-// home screen, with steps that match their phone (iPhone/iPad vs. Android).
+// ================= HOME SCREEN HELPERS (customer pass page only) =================
+// Two things, both only on pass links (#/p/...):
+//   1. A small, dismissible banner that shows a customer how to put their pass on their phone's
+//      home screen, with steps that match their phone (iPhone/iPad vs. Android).
+//   2. Names the home screen icon after the pass number (e.g. "CP-0002") instead of "CausePass",
+//      so a customer with more than one pass can tell their icons apart.
 //
 // Deliberately standalone: it doesn't touch customer.js / admin.js / style.css. The banner is
 // inserted just BEFORE #app (not inside it), because customer.js re-draws everything inside
@@ -141,6 +144,42 @@
     app.parentNode.insertBefore(banner, app);
   }
 
-  window.addEventListener("hashchange", update);
+  // ---- Home screen icon name ----
+  // iPhone uses the apple-mobile-web-app-title tag, other phones use the page title, when
+  // "Add to Home Screen" is tapped - so both are set to the pass number once we know it.
+  // Passes without a number (and every non-pass page) keep the normal "CausePass" name.
+  const originalTitle = document.title;
+  const titleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  const originalMetaTitle = titleMeta ? titleMeta.getAttribute("content") : null;
+  let namedToken = null; // the pass we've already looked up, so we don't ask twice
+
+  function setHomeScreenName(pageTitle, metaTitle) {
+    document.title = pageTitle;
+    if (titleMeta && metaTitle != null) titleMeta.setAttribute("content", metaTitle);
+  }
+
+  function updateName() {
+    const match = window.location.hash.match(/^#\/p\/(.+)$/);
+    if (!match) {
+      namedToken = null;
+      setHomeScreenName(originalTitle, originalMetaTitle);
+      return;
+    }
+    const token = match[1];
+    if (namedToken === token) return;
+    namedToken = token;
+    if (!window.db || typeof formatPassNumber !== "function") return;
+    window.db.collection("passes").doc(token).get().then((doc) => {
+      if (namedToken !== token) return; // they moved to another page while we were looking
+      const number = doc.exists ? doc.data().passNumber : null;
+      if (number) {
+        const name = formatPassNumber(number);
+        setHomeScreenName(name, name);
+      }
+    }).catch(() => { /* couldn't look it up - keep the default name */ });
+  }
+
+  window.addEventListener("hashchange", () => { update(); updateName(); });
   update();
+  updateName();
 })();
