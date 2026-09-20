@@ -573,7 +573,7 @@ const AdminView = (function () {
       return `
         <div style="display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:6px 10px; margin-right:8px; margin-bottom:8px;">
           <span style="font-size:12px; font-weight:700;">${escapeHtml(initials(m.name))}</span> ${escapeHtml(m.name)}
-          ${m.address ? `<a href="${escapeHtml(mapsUrl(m.address))}" target="_blank" rel="noreferrer" title="${escapeHtml(m.address)}" style="font-size:12px; text-decoration:none;">📍</a>` : ""}
+          ${m.address ? `<a href="${escapeHtml(mapsUrl(m.address, m.name))}" target="_blank" rel="noreferrer" title="${escapeHtml(m.address)}" style="font-size:12px; text-decoration:none;">📍</a>` : ""}
           ${state.showArchivedMerchants
             ? `<button data-action="unarchive-merchant" data-id="${m.id}" style="padding:4px 8px; font-size:12px;">Restore</button>`
             : `<button data-action="edit-merchant" data-id="${m.id}" style="padding:4px 8px; font-size:12px;">Edit</button>

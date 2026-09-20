@@ -100,6 +100,9 @@ const LandingView = (function () {
     const org = state.org;
     const videoProgram = state.programs.find((p) => !p.isTest && p.videoUrl);
     const videoId = videoProgram ? extractYouTubeId(videoProgram.videoUrl) : null;
+    // Regular YouTube videos are landscape (16:9) and get the full page width; only YouTube
+    // Shorts links keep the narrow portrait (9:16) frame.
+    const isPortraitVideo = !!(videoProgram && /\/shorts\//.test(videoProgram.videoUrl));
 
     app.innerHTML = `
       <div style="max-width:720px; margin:0 auto; padding:28px 16px 60px;">
@@ -117,7 +120,7 @@ const LandingView = (function () {
         </div>
 
         ${videoId ? `
-          <div style="max-width:280px; margin:0 auto 28px; aspect-ratio:9/16; border-radius:16px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,0.12);">
+          <div style="max-width:${isPortraitVideo ? "280px" : "640px"}; width:100%; margin:0 auto 28px; aspect-ratio:${isPortraitVideo ? "9/16" : "16/9"}; border-radius:16px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,0.12);">
             <iframe
               src="https://www.youtube.com/embed/${videoId}"
               title="How CausePass works"
