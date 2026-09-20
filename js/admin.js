@@ -129,18 +129,18 @@ const AdminView = (function () {
     await db.collection("merchants").doc(id).update({ archived });
     showToast(archived ? "Merchant archived" : "Merchant restored");
   }
-  async function createOffer(programId, merchantId, terms, exp, discountAmount, minPurchase, details) {
+  async function createOffer(programId, merchantId, terms, exp, discountAmount, minPurchase, details, description) {
     if (!programId || !merchantId) { showToast("Create a campaign and a merchant first"); return; }
     await db.collection("offers").add({
-      programId, merchantId, terms, details: details || null, expiresAt: exp || null, active: true, archived: false,
+      programId, merchantId, terms, details: details || null, description: description || null, expiresAt: exp || null, active: true, archived: false,
       discountAmount: discountAmount ? parseFloat(discountAmount) : null,
       minPurchase: minPurchase ? parseFloat(minPurchase) : null,
     });
     showToast("Offer added");
   }
-  async function updateOffer(id, merchantId, terms, exp, discountAmount, minPurchase, details) {
+  async function updateOffer(id, merchantId, terms, exp, discountAmount, minPurchase, details, description) {
     await db.collection("offers").doc(id).update({
-      merchantId, terms, details: details || null, expiresAt: exp || null,
+      merchantId, terms, details: details || null, description: description || null, expiresAt: exp || null,
       discountAmount: discountAmount ? parseFloat(discountAmount) : null,
       minPurchase: minPurchase ? parseFloat(minPurchase) : null,
     });
@@ -623,6 +623,8 @@ const AdminView = (function () {
             <br/>
             <input id="edit-offer-terms-${o.id}" value="${escapeHtml(o.terms)}" placeholder="Short headline, e.g. $5 off $50+" style="margin-top:8px; width:280px;" />
             <br/>
+            <textarea id="edit-offer-description-${o.id}" rows="3" placeholder="Description shown to customers before they redeem (optional)" style="margin-top:8px; width:100%; max-width:420px;">${escapeHtml(o.description || "")}</textarea>
+            <br/>
             <textarea id="edit-offer-details-${o.id}" rows="3" placeholder="Fine print (optional) — one point per line" style="margin-top:8px; width:100%; max-width:420px;">${escapeHtml(o.details || "")}</textarea>
             <br/>
             <input type="number" step="0.01" min="0" id="edit-offer-discount-amount-${o.id}" value="${o.discountAmount ?? ""}" placeholder="Discount amount $" style="margin-top:8px; width:140px;" />
@@ -654,6 +656,8 @@ const AdminView = (function () {
         <input type="date" id="offer-expiry" />
         <br/>
         <input id="offer-terms" placeholder="Short headline, e.g. $5 off $50+" style="margin-top:8px; width:240px;" />
+        <br/>
+        <textarea id="offer-description" rows="3" placeholder="Description shown to customers before they redeem (optional), e.g. what the offer includes" style="margin-top:8px; width:100%; max-width:420px;"></textarea>
         <br/>
         <textarea id="offer-details" rows="3" placeholder="Fine print (optional) — one point per line, e.g. Dine-in or takeout" style="margin-top:8px; width:100%; max-width:420px;"></textarea>
         <br/>
@@ -845,7 +849,11 @@ const AdminView = (function () {
       const minPurchase = document.getElementById("offer-min-purchase").value;
       const termsInput = document.getElementById("offer-terms");
       const detailsInput = document.getElementById("offer-details");
-      if (termsInput.value.trim()) { createOffer(programId, merchantId, termsInput.value.trim(), exp, discountAmount, minPurchase, detailsInput.value.trim()); termsInput.value = ""; detailsInput.value = ""; }
+      const descriptionInput = document.getElementById("offer-description");
+      if (termsInput.value.trim()) {
+        createOffer(programId, merchantId, termsInput.value.trim(), exp, discountAmount, minPurchase, detailsInput.value.trim(), descriptionInput.value.trim());
+        termsInput.value = ""; detailsInput.value = ""; descriptionInput.value = "";
+      }
     });
     const offerSearchInput = app.querySelector("#offer-search");
     if (offerSearchInput) offerSearchInput.addEventListener("input", () => { state.offerSearch = offerSearchInput.value; render(); });
@@ -869,7 +877,8 @@ const AdminView = (function () {
         const minPurchase = document.getElementById(`edit-offer-min-purchase-${id}`).value;
         const terms = document.getElementById(`edit-offer-terms-${id}`).value.trim();
         const details = document.getElementById(`edit-offer-details-${id}`).value.trim();
-        if (terms) updateOffer(id, merchantId, terms, exp, discountAmount, minPurchase, details);
+        const description = document.getElementById(`edit-offer-description-${id}`).value.trim();
+        if (terms) updateOffer(id, merchantId, terms, exp, discountAmount, minPurchase, details, description);
       });
     });
     app.querySelectorAll('[data-action="archive-offer"]').forEach((el) => {

@@ -19,6 +19,7 @@ const CustomerView = (function () {
       merchants: {},
       offerDetails: {}, // cache for offers referenced by past redemptions but no longer in the active offers list (e.g. archived since)
       redemptions: [],
+      detailOffer: null,
       confirmOffer: null,
       instructionsOpen: false,
       liveOffer: null,
@@ -189,14 +190,12 @@ const CustomerView = (function () {
       const disabled = redeemed || offerExpired || expired || capped || state.pass.status === "disabled";
       return `
         <div class="offer-card ${redeemed ? "redeemed" : ""}">
-          <div class="offer-row">
+          <div class="offer-row ${disabled || redeemed ? "" : "tappable"}" ${disabled || redeemed ? "" : `data-action="confirm-offer" data-offer-id="${offer.id}"`}>
             <div class="offer-left">
               <div class="avatar">${escapeHtml(initials(merchant && merchant.name))}</div>
               <div>
                 <div class="offer-merchant">${escapeHtml(merchant && merchant.name)}</div>
                 <div class="offer-savings">${escapeHtml(offer.terms)}</div>
-                ${merchant && merchant.address ? `<div style="font-size:13px; color:var(--muted); margin-top:4px;">${escapeHtml(merchant.address)}</div>` : ""}
-                ${directionsLinkHtml(merchant, true)}
               </div>
             </div>
             <span class="badge ${redeemed ? "grey" : "green"}">${redeemed ? "Redeemed" : "Available"}</span>
@@ -209,7 +208,7 @@ const CustomerView = (function () {
                  ? `<button style="margin-top:8px; font-size:12px; padding:6px 10px;" data-action="reopen-amount" data-offer-id="${offer.id}">Add purchase total (optional)</button>`
                  : ""
                }`
-            : `<button class="primary" style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">Redeem this offer</button>`
+            : `<button style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">View details</button>`
           }
         </div>`;
     }).join("");
@@ -248,7 +247,8 @@ const CustomerView = (function () {
         </div>
       </div>
 
-      ${state.confirmOffer ? renderOfferSheet(state.confirmOffer) : ""}
+      ${state.detailOffer ? renderOfferDetailSheet(state.detailOffer) : ""}
+      ${state.confirmOffer ? renderConfirmSheet(state.confirmOffer) : ""}
 
       ${state.liveOffer ? renderLiveValidation() : ""}
     `;
@@ -279,20 +279,41 @@ const CustomerView = (function () {
     return lines;
   }
 
-  // The pop-up after "Redeem this offer": the terms and an on-site reminder, as a last chance to
-  // double-check because redeeming can't be undone. Still two taps in total:
-  // Redeem this offer (card) -> Redeem now (here).
-  function renderOfferSheet(offer) {
+  // Redeeming is a two-step pop-up flow: tapping an offer first opens this
+  // description sheet (merchant, savings, admin-entered description, and the
+  // fine-print lines). Tapping Redeem here moves on to the "are you sure?"
+  // confirmation sheet below, which is the one that actually redeems.
+  function renderOfferDetailSheet(offer) {
     const merchant = state.merchants[offer.merchantId];
     const lines = offerDetailLines(offer).map((l) => `<li>${escapeHtml(l)}</li>`).join("");
+    const location = directionsLinkHtml(merchant);
     return `
       <div class="modal-backdrop">
         <div class="modal sheet">
-          <div style="font-weight:700; font-size:18px;">Terms &amp; Conditions</div>
-          <div style="font-weight:700; font-size:16px; margin-top:12px; line-height:1.25;">${escapeHtml(merchant && merchant.name)}</div>
+          <div style="font-weight:700; font-size:20px; line-height:1.25;">${escapeHtml(merchant && merchant.name)}</div>
           <div class="sheet-savings">${escapeHtml(offer.terms)}</div>
+          ${offer.description ? `<div style="margin-top:12px; font-size:14px; line-height:1.5; white-space:pre-wrap;">${escapeHtml(offer.description)}</div>` : ""}
           <ul class="sheet-lines">${lines}</ul>
-          <div class="sheet-reminder"><strong>Redeem on site only.</strong> Only redeem this offer when you're at the business and ready to pay. Redeeming can't be undone.</div>
+          ${location ? `<div style="margin-top:12px;">${location}</div>` : ""}
+          <div style="display:flex; gap:8px; margin-top:16px;">
+            <button data-action="cancel-detail" style="flex:1;">Cancel</button>
+            <button class="primary" data-action="proceed-confirm" style="flex:2;">Redeem</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // The "are you sure?" confirmation step. Only tapping Redeem now here actually
+  // performs the server-verified redemption.
+  function renderConfirmSheet(offer) {
+    const merchant = state.merchants[offer.merchantId];
+    return `
+      <div class="modal-backdrop">
+        <div class="modal sheet">
+          <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;">Ready to redeem?</div>
+          <div style="font-weight:700; font-size:20px; margin-top:6px; line-height:1.25;">${escapeHtml(merchant && merchant.name)}</div>
+          <div class="sheet-savings">${escapeHtml(offer.terms)}</div>
+          <div class="sheet-warning">Only redeem this offer when you're at the business and ready to pay. It can only be used once.</div>
           <div style="display:flex; gap:8px;">
             <button data-action="cancel-confirm" style="flex:1;">Cancel</button>
             <button class="primary" data-action="do-redeem" style="flex:2;">Redeem now</button>
@@ -351,7 +372,7 @@ const CustomerView = (function () {
           <div style="padding:0 14px 14px; font-size:13px; color:var(--ink); line-height:1.6;">
             <ol style="margin:0; padding-left:18px;">
               <li>Browse the offers below, and pick one when you're ready to pay</li>
-              <li>When you're at the counter, tap <strong>Redeem this offer</strong>, check the terms, then tap <strong>Redeem now</strong></li>
+              <li>When you're at the counter, tap <strong>View details</strong>, then <strong>Redeem</strong>, then confirm with <strong>Redeem now</strong></li>
               <li>Show the green <strong>Valid redemption</strong> screen to the cashier</li>
               <li>No app, no login, nothing to install — this page is your pass</li>
             </ol>
@@ -460,9 +481,17 @@ const CustomerView = (function () {
     });
     app.querySelectorAll('[data-action="confirm-offer"]').forEach((el) => {
       el.addEventListener("click", () => {
-        state.confirmOffer = state.offers.find((o) => o.id === el.dataset.offerId);
+        state.detailOffer = state.offers.find((o) => o.id === el.dataset.offerId);
         render();
       });
+    });
+    const cancelDetailBtn = app.querySelector('[data-action="cancel-detail"]');
+    if (cancelDetailBtn) cancelDetailBtn.addEventListener("click", () => { state.detailOffer = null; render(); });
+    const proceedConfirmBtn = app.querySelector('[data-action="proceed-confirm"]');
+    if (proceedConfirmBtn) proceedConfirmBtn.addEventListener("click", () => {
+      state.confirmOffer = state.detailOffer;
+      state.detailOffer = null;
+      render();
     });
     app.querySelectorAll('[data-action="reopen-amount"]').forEach((el) => {
       el.addEventListener("click", () => {
