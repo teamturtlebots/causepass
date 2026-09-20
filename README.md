@@ -52,3 +52,10 @@ Nothing — same screens, same redemption transaction, same security rules,
 same admin/customer split. The only thing that changed is *how* it's built:
 no React, no Node, no npm, no build tool. Every file here is exactly what
 the browser runs, with nothing translating or compiling it first.
+
+## Map links for partner businesses
+
+Admin → Merchants: add a street address when adding or editing a merchant. It shows as a
+"📍 address" link under that business on the landing page and on each customer's pass,
+opening the location in Google Maps (or the Maps app on a phone). It's a plain link — no API
+key, billing, or extra setup. Merchants without an address just don't show the link.
