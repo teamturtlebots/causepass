@@ -5,6 +5,7 @@ const CustomerView = (function () {
   let state = {};
   let unsubscribers = [];
   let tickTimer = null;
+  const LIVE_WINDOW_MS = 5 * 60 * 1000; // how long the live "happening now" screen counts down
 
   function resetState(token) {
     unsubscribers.forEach((u) => u());
@@ -19,12 +20,15 @@ const CustomerView = (function () {
       merchants: {},
       offerDetails: {}, // cache for offers referenced by past redemptions but no longer in the active offers list (e.g. archived since)
       redemptions: [],
-      detailOffer: null,
       confirmOffer: null,
       instructionsOpen: false,
       liveOffer: null,
       error: "",
       amountSavedError: "",
+      editingAmountId: null, // offer whose purchase total is being added/edited inline on its card
+      amountEditDraft: "",
+      amountEditError: "",
+      focusAmount: false,
       now: Date.now(),
     };
   }
@@ -190,12 +194,14 @@ const CustomerView = (function () {
       const disabled = redeemed || offerExpired || expired || capped || state.pass.status === "disabled";
       return `
         <div class="offer-card ${redeemed ? "redeemed" : ""}">
-          <div class="offer-row ${disabled || redeemed ? "" : "tappable"}" ${disabled || redeemed ? "" : `data-action="confirm-offer" data-offer-id="${offer.id}"`}>
+          <div class="offer-row">
             <div class="offer-left">
               <div class="avatar">${escapeHtml(initials(merchant && merchant.name))}</div>
               <div>
                 <div class="offer-merchant">${escapeHtml(merchant && merchant.name)}</div>
                 <div class="offer-savings">${escapeHtml(offer.terms)}</div>
+                ${merchant && merchant.address ? `<div style="font-size:13px; color:var(--muted); margin-top:4px;">${escapeHtml(merchant.address)}</div>` : ""}
+                ${directionsLinkHtml(merchant, true)}
               </div>
             </div>
             <span class="badge ${redeemed ? "grey" : "green"}">${redeemed ? "Redeemed" : "Available"}</span>
@@ -204,11 +210,8 @@ const CustomerView = (function () {
             ? `<div style="font-size:11px; color:var(--muted); margin-top:8px;">
                  ✓ ${fmtDate(redemption.timestamp)}${redemption.discountAmount != null ? ` · $${redemption.discountAmount.toFixed(2)} saved` : ""}
                </div>
-               ${redemption.amountSpent == null
-                 ? `<button style="margin-top:8px; font-size:12px; padding:6px 10px;" data-action="reopen-amount" data-offer-id="${offer.id}">Add purchase total (optional)</button>`
-                 : ""
-               }`
-            : `<button style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">View details</button>`
+               ${renderCardAmount(offer.id, redemption)}`
+            : `<button class="primary" style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">Redeem this offer</button>`
           }
         </div>`;
     }).join("");
@@ -247,8 +250,7 @@ const CustomerView = (function () {
         </div>
       </div>
 
-      ${state.detailOffer ? renderOfferDetailSheet(state.detailOffer) : ""}
-      ${state.confirmOffer ? renderConfirmSheet(state.confirmOffer) : ""}
+      ${state.confirmOffer ? renderOfferSheet(state.confirmOffer) : ""}
 
       ${state.liveOffer ? renderLiveValidation() : ""}
     `;
@@ -279,41 +281,20 @@ const CustomerView = (function () {
     return lines;
   }
 
-  // Redeeming is a two-step pop-up flow: tapping an offer first opens this
-  // description sheet (merchant, savings, admin-entered description, and the
-  // fine-print lines). Tapping Redeem here moves on to the "are you sure?"
-  // confirmation sheet below, which is the one that actually redeems.
-  function renderOfferDetailSheet(offer) {
+  // The pop-up after "Redeem this offer": the terms and an on-site reminder, as a last chance to
+  // double-check because redeeming can't be undone. Still two taps in total:
+  // Redeem this offer (card) -> Redeem now (here).
+  function renderOfferSheet(offer) {
     const merchant = state.merchants[offer.merchantId];
     const lines = offerDetailLines(offer).map((l) => `<li>${escapeHtml(l)}</li>`).join("");
-    const location = directionsLinkHtml(merchant);
     return `
       <div class="modal-backdrop">
         <div class="modal sheet">
-          <div style="font-weight:700; font-size:20px; line-height:1.25;">${escapeHtml(merchant && merchant.name)}</div>
+          <div style="font-weight:700; font-size:18px;">Terms &amp; Conditions</div>
+          <div style="font-weight:700; font-size:16px; margin-top:12px; line-height:1.25;">${escapeHtml(merchant && merchant.name)}</div>
           <div class="sheet-savings">${escapeHtml(offer.terms)}</div>
-          ${offer.description ? `<div style="margin-top:12px; font-size:14px; line-height:1.5; white-space:pre-wrap;">${escapeHtml(offer.description)}</div>` : ""}
           <ul class="sheet-lines">${lines}</ul>
-          ${location ? `<div style="margin-top:12px;">${location}</div>` : ""}
-          <div style="display:flex; gap:8px; margin-top:16px;">
-            <button data-action="cancel-detail" style="flex:1;">Cancel</button>
-            <button class="primary" data-action="proceed-confirm" style="flex:2;">Redeem</button>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  // The "are you sure?" confirmation step. Only tapping Redeem now here actually
-  // performs the server-verified redemption.
-  function renderConfirmSheet(offer) {
-    const merchant = state.merchants[offer.merchantId];
-    return `
-      <div class="modal-backdrop">
-        <div class="modal sheet">
-          <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;">Ready to redeem?</div>
-          <div style="font-weight:700; font-size:20px; margin-top:6px; line-height:1.25;">${escapeHtml(merchant && merchant.name)}</div>
-          <div class="sheet-savings">${escapeHtml(offer.terms)}</div>
-          <div class="sheet-warning">Only redeem this offer when you're at the business and ready to pay. It can only be used once.</div>
+          <div class="sheet-reminder"><strong>Redeem on site only.</strong> Only redeem this offer when you're at the business and ready to pay. Redeeming can't be undone.</div>
           <div style="display:flex; gap:8px;">
             <button data-action="cancel-confirm" style="flex:1;">Cancel</button>
             <button class="primary" data-action="do-redeem" style="flex:2;">Redeem now</button>
@@ -322,42 +303,66 @@ const CustomerView = (function () {
       </div>`;
   }
 
-  async function submitSpend(offerId, spendStr) {
+  // Validates and saves the optional purchase total. Used by both the live screen and the
+  // pass card. Blank = nothing to save (it's optional). Returns { ok, error }.
+  async function saveAmountSpent(offerId, spendStr) {
     const trimmed = (spendStr || "").trim();
-    if (trimmed === "") {
-      // Optional field — leaving it blank is a completely normal, valid choice. Nothing to save, nothing to error on.
-      state.amountSavedError = "";
-      render();
-      return;
-    }
+    if (trimmed === "") return { ok: true, skipped: true };
     const spend = parseFloat(trimmed);
-    if (isNaN(spend) || spend < 0) {
-      state.amountSavedError = "Enter a valid amount.";
-      render();
-      return;
-    }
-    const redemptionId = `${state.token}_${offerId}`;
+    if (isNaN(spend) || spend < 0) return { ok: false, error: "Enter a valid amount." };
     try {
-      await db.collection("redemptions").doc(redemptionId).update({ amountSpent: spend });
-      state.amountSavedError = "";
+      await db.collection("redemptions").doc(`${state.token}_${offerId}`).update({ amountSpent: Math.round(spend * 100) / 100 });
+      return { ok: true };
     } catch (e) {
-      state.amountSavedError = "Couldn't save that — try again.";
+      return { ok: false, error: "Couldn't save that \u2014 try again." };
     }
+  }
+
+  // Live screen's "Save" button.
+  async function submitSpend(offerId, spendStr) {
+    const result = await saveAmountSpent(offerId, spendStr);
+    state.amountSavedError = result.ok ? "" : result.error;
     render();
   }
 
+  // Purchase total line on a redeemed pass card: add it, see it, or edit it right there.
+  // (It never reopens the live redemption screen.)
+  function renderCardAmount(offerId, redemption) {
+    if (state.editingAmountId === offerId) {
+      return `
+        <div style="margin-top:10px;">
+          <label for="card-amount-input" style="font-size:12px; color:var(--muted);">Purchase total (optional)</label>
+          <div class="row-flex" style="margin-top:4px;">
+            <input id="card-amount-input" type="number" inputmode="decimal" step="0.01" min="0" placeholder="$" value="${escapeHtml(state.amountEditDraft)}" style="width:110px;" />
+            <button class="primary" data-action="save-card-amount" data-offer-id="${offerId}">Save</button>
+            <button data-action="cancel-card-amount">Cancel</button>
+          </div>
+          ${state.amountEditError ? `<div style="font-size:12px; color:#B3261E; margin-top:6px;">${escapeHtml(state.amountEditError)}</div>` : ""}
+        </div>`;
+    }
+    if (redemption.amountSpent != null) {
+      return `
+        <div style="font-size:13px; margin-top:8px;">
+          Purchase total: <strong>$${redemption.amountSpent.toFixed(2)}</strong> \u00b7
+          <button type="button" data-action="edit-card-amount" data-offer-id="${offerId}" style="background:none; border:none; padding:0; color:var(--navy); font-weight:600; font-size:13px; text-decoration:underline; cursor:pointer;">Edit</button>
+        </div>`;
+    }
+    return `<button style="margin-top:8px; font-size:12px; padding:6px 10px;" data-action="edit-card-amount" data-offer-id="${offerId}">Add purchase total (optional)</button>`;
+  }
+
+  // Ticks the big countdown and progress bar in place (so typing in the amount box isn't
+  // interrupted). When the 5 minutes run out it re-renders once into the "window closed" screen.
   function updateLiveCountdown() {
     if (!state.liveOffer) return;
-    const el = document.getElementById("live-timer-chip");
-    if (!el) return; // modal isn't open right now, nothing to update
-    const lo = state.liveOffer;
-    const remaining = Math.max(0, 300000 - (state.now - lo.ts));
+    const timerEl = document.getElementById("rv-timer");
+    if (!timerEl) return; // no countdown on screen (closed / already-redeemed screens, or nothing open)
+    const remaining = Math.max(0, LIVE_WINDOW_MS - (state.now - state.liveOffer.ts));
+    if (remaining <= 0) { render(); return; }
     const mins = Math.floor(remaining / 60000);
     const secs = Math.floor((remaining % 60000) / 1000);
-    const live = remaining > 0 && !lo.alreadyRedeemed;
-    el.outerHTML = live
-      ? `<div id="live-timer-chip" style="font-size:11px; background:rgba(255,255,255,0.1); display:inline-block; padding:5px 12px; border-radius:20px;">Live verification · ${mins}:${String(secs).padStart(2, "0")} remaining</div>`
-      : `<div id="live-timer-chip" style="font-size:11px; color:#97C459;">Live window closed</div>`;
+    timerEl.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
+    const bar = document.getElementById("rv-bar-fill");
+    if (bar) bar.style.width = `${Math.round((remaining / LIVE_WINDOW_MS) * 100)}%`;
   }
 
   function renderInstructions(cap) {
@@ -372,7 +377,7 @@ const CustomerView = (function () {
           <div style="padding:0 14px 14px; font-size:13px; color:var(--ink); line-height:1.6;">
             <ol style="margin:0; padding-left:18px;">
               <li>Browse the offers below, and pick one when you're ready to pay</li>
-              <li>When you're at the counter, tap <strong>View details</strong>, then <strong>Redeem</strong>, then confirm with <strong>Redeem now</strong></li>
+              <li>When you're at the counter, tap <strong>Redeem this offer</strong>, check the terms, then tap <strong>Redeem now</strong></li>
               <li>Show the green <strong>Valid redemption</strong> screen to the cashier</li>
               <li>No app, no login, nothing to install — this page is your pass</li>
             </ol>
@@ -385,52 +390,83 @@ const CustomerView = (function () {
       </div>`;
   }
 
+  // The screen the cashier reads. Three looks, chosen automatically:
+  //   live   - first 5 minutes after "Redeem now" (pulsing LIVE + countdown = proof it's happening now)
+  //   closed - the 5 minutes ran out while this screen was open
+  //   used   - the app found this offer was already redeemed (double-tap, refresh, second phone)
+  // Merchant name and offer are deliberately huge so they can be read from across the counter.
   function renderLiveValidation() {
     const lo = state.liveOffer;
     const merchant = state.merchants[lo.offer.merchantId];
-    const remaining = Math.max(0, 300000 - (state.now - lo.ts));
+    const remaining = Math.max(0, LIVE_WINDOW_MS - (state.now - lo.ts));
     const mins = Math.floor(remaining / 60000);
     const secs = Math.floor((remaining % 60000) / 1000);
-    const live = remaining > 0 && !lo.alreadyRedeemed;
+    const usedAlready = !!lo.alreadyRedeemed;
+    const variant = usedAlready ? "used" : (remaining > 0 ? "live" : "closed");
     const redemption = state.redemptions.find((r) => r.offerId === lo.offer.id);
-    // discountAmount was locked in at the moment of redemption — always known, never depends on customer input.
+    // discountAmount was locked in at the moment of redemption \u2014 always known, never depends on customer input.
     const discountAmount = lo.discountAmount != null ? lo.discountAmount : (redemption && redemption.discountAmount);
     const amountSpent = redemption && redemption.amountSpent;
 
-    return `
-      <div class="modal-backdrop">
-        <div class="modal dark">
-          <div style="font-size:19px; font-weight:700; color:#EAF3DE; margin-bottom:10px;">
-            ${lo.alreadyRedeemed ? "Already redeemed" : "Valid redemption"}
-          </div>
-          <div style="font-weight:700;">${escapeHtml(merchant && merchant.name)}</div>
-          <div style="font-size:13px; color:#C0DD97;">${escapeHtml(lo.offer.terms)}</div>
-          <div style="font-size:12px; color:#97C459; margin-bottom:16px;">${fmtDate(lo.ts)}</div>
-          ${live
-            ? `<div id="live-timer-chip" style="font-size:11px; background:rgba(255,255,255,0.1); display:inline-block; padding:5px 12px; border-radius:20px;">Live verification · ${mins}:${String(secs).padStart(2, "0")} remaining</div>`
-            : `<div id="live-timer-chip" style="font-size:11px; color:#97C459;">Live window closed</div>`
-          }
+    const icon = usedAlready
+      ? `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3B1410" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>`
+      : `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#173404" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>`;
 
-          <div style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.14);">
-            <div style="font-size:14px; color:#8FE0AA; font-weight:700;">
-              ${discountAmount != null ? `You saved $${discountAmount.toFixed(2)}` : "Savings amount not set for this offer"}
+    const statusBox = variant === "live"
+      ? `<div class="rv-livebox">
+           <div class="rv-live-row">
+             <div class="rv-live-label"><span class="rv-dot"></span>LIVE</div>
+             <div class="rv-timer" id="rv-timer">${mins}:${String(secs).padStart(2, "0")}</div>
+           </div>
+           <div class="rv-bar"><div class="rv-bar-fill" id="rv-bar-fill" style="width:${Math.round((remaining / LIVE_WINDOW_MS) * 100)}%"></div></div>
+           <div class="rv-live-note">Live verification: this redemption is happening now</div>
+         </div>`
+      : variant === "closed"
+        ? `<div class="rv-warn">
+             <div class="rv-warn-title">LIVE WINDOW CLOSED</div>
+             <div class="rv-warn-text">The 5-minute live check has ended. This screen can no longer prove a new redemption.</div>
+           </div>`
+        : `<div class="rv-warn">
+             <div class="rv-warn-title">NOT A NEW REDEMPTION</div>
+             <div class="rv-warn-text">This offer was already used on this pass. It can only be used once.</div>
+           </div>`;
+
+    let customer;
+    if (usedAlready) {
+      customer = discountAmount != null ? `<div class="rv-saved">Saved $${discountAmount.toFixed(2)} when it was used</div>` : "";
+    } else {
+      customer = `
+        <div class="rv-saved">${discountAmount != null ? `You saved $${discountAmount.toFixed(2)}` : "Savings amount not set for this offer"}</div>
+        ${amountSpent != null
+          ? `<div class="rv-sub">Purchase total: $${amountSpent.toFixed(2)} \u00b7 thank you!</div>`
+          : `
+            <label class="rv-sub" for="amount-saved-input">Purchase total (optional)</label>
+            <div class="rv-help">Helps us measure the impact for our restaurant partners.</div>
+            <div class="rv-amount-row">
+              <input type="number" inputmode="decimal" step="0.01" min="0" id="amount-saved-input" placeholder="$" value="${escapeHtml(state.amountSavedDraft || "")}" />
+              <button class="primary" data-action="submit-amount" data-offer-id="${lo.offer.id}">Save</button>
             </div>
+            ${state.amountSavedError ? `<div class="rv-error">${escapeHtml(state.amountSavedError)}</div>` : ""}
+          `}`;
+    }
 
-            ${amountSpent != null
-              ? `<div style="font-size:11px; color:#9DBBDD; margin-top:6px;">Purchase total: $${amountSpent.toFixed(2)} — thank you!</div>`
-              : `
-                <div style="font-size:12px; color:#C0DD97; margin-top:14px; margin-bottom:2px;">Purchase total (optional)</div>
-                <div style="font-size:11px; color:#9DBBDD; margin-bottom:8px;">Helps us measure the impact for our restaurant partners.</div>
-                <div class="row-flex" style="justify-content:center;">
-                  <input type="number" step="0.01" min="0" id="amount-saved-input" placeholder="$" value="${escapeHtml(state.amountSavedDraft || "")}" style="width:100px;" />
-                  <button class="primary" data-action="submit-amount" data-offer-id="${lo.offer.id}">Save</button>
-                </div>
-                ${state.amountSavedError ? `<div style="font-size:12px; color:#F4A9A9; margin-top:6px;">${escapeHtml(state.amountSavedError)}</div>` : ""}
-              `
-            }
+    return `
+      <div class="rv rv-${variant}" role="dialog" aria-modal="true" aria-label="${usedAlready ? "Already redeemed" : "Valid redemption"}">
+        <div class="rv-inner">
+          <div class="rv-status">
+            <div class="rv-icon">${icon}</div>
+            <div class="rv-status-text">${usedAlready ? "ALREADY REDEEMED" : "VALID REDEMPTION"}</div>
           </div>
-
-          <div style="margin-top:16px;"><button data-action="close-live">Close</button></div>
+          <div class="rv-hero">
+            <div class="rv-merchant">${escapeHtml(merchant && merchant.name)}</div>
+            <div class="rv-offer">${escapeHtml(lo.offer.terms)}</div>
+            <div class="rv-time">${usedAlready ? "Used " : ""}${fmtDate(lo.ts)}</div>
+          </div>
+          ${statusBox}
+          <div class="rv-customer">
+            ${customer}
+            <button class="rv-close" data-action="close-live">Close</button>
+          </div>
         </div>
       </div>`;
   }
@@ -481,28 +517,38 @@ const CustomerView = (function () {
     });
     app.querySelectorAll('[data-action="confirm-offer"]').forEach((el) => {
       el.addEventListener("click", () => {
-        state.detailOffer = state.offers.find((o) => o.id === el.dataset.offerId);
+        state.confirmOffer = state.offers.find((o) => o.id === el.dataset.offerId);
         render();
       });
     });
-    const cancelDetailBtn = app.querySelector('[data-action="cancel-detail"]');
-    if (cancelDetailBtn) cancelDetailBtn.addEventListener("click", () => { state.detailOffer = null; render(); });
-    const proceedConfirmBtn = app.querySelector('[data-action="proceed-confirm"]');
-    if (proceedConfirmBtn) proceedConfirmBtn.addEventListener("click", () => {
-      state.confirmOffer = state.detailOffer;
-      state.detailOffer = null;
-      render();
-    });
-    app.querySelectorAll('[data-action="reopen-amount"]').forEach((el) => {
+    app.querySelectorAll('[data-action="edit-card-amount"]').forEach((el) => {
       el.addEventListener("click", () => {
         const offerId = el.dataset.offerId;
-        const offer = state.offers.find((o) => o.id === offerId) || getOfferInfo(offerId);
         const redemption = state.redemptions.find((r) => r.offerId === offerId);
-        state.liveOffer = { offer, ts: redemption.timestamp, alreadyRedeemed: true, discountAmount: redemption.discountAmount };
-        state.amountSavedDraft = "";
+        state.editingAmountId = offerId;
+        state.amountEditDraft = redemption && redemption.amountSpent != null ? String(redemption.amountSpent) : "";
+        state.amountEditError = "";
+        state.focusAmount = true;
         render();
       });
     });
+    app.querySelectorAll('[data-action="cancel-card-amount"]').forEach((el) => {
+      el.addEventListener("click", () => { state.editingAmountId = null; state.amountEditError = ""; render(); });
+    });
+    app.querySelectorAll('[data-action="save-card-amount"]').forEach((el) => {
+      el.addEventListener("click", async () => {
+        const input = document.getElementById("card-amount-input");
+        const result = await saveAmountSpent(el.dataset.offerId, input ? input.value : "");
+        if (result.ok) { state.editingAmountId = null; state.amountEditError = ""; }
+        else state.amountEditError = result.error;
+        render();
+      });
+    });
+    const cardAmountInput = app.querySelector("#card-amount-input");
+    if (cardAmountInput) {
+      cardAmountInput.addEventListener("input", () => { state.amountEditDraft = cardAmountInput.value; });
+      if (state.focusAmount) { state.focusAmount = false; cardAmountInput.focus(); }
+    }
     const cancelBtn = app.querySelector('[data-action="cancel-confirm"]');
     if (cancelBtn) cancelBtn.addEventListener("click", () => { state.confirmOffer = null; render(); });
     const doRedeemBtn = app.querySelector('[data-action="do-redeem"]');
