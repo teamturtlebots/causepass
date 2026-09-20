@@ -207,7 +207,7 @@ const CustomerView = (function () {
                  ? `<button style="margin-top:8px; font-size:12px; padding:6px 10px;" data-action="reopen-amount" data-offer-id="${offer.id}">Add purchase total (optional)</button>`
                  : ""
                }`
-            : `<button class="primary" style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">Redeem this offer</button>`
+            : `<button style="width:100%; margin-top:10px;" ${disabled ? "disabled" : ""} data-action="confirm-offer" data-offer-id="${offer.id}">View details</button>`
           }
         </div>`;
     }).join("");
@@ -270,7 +270,7 @@ const CustomerView = (function () {
   // (minimum purchase, expiry) plus the optional free-text "details" (one line per point).
   function offerDetailLines(offer) {
     const lines = [];
-    if (offer.minPurchase != null && offer.minPurchase > 0) lines.push(`Minimum purchase: ${fmtMoneyShort(offer.minPurchase)}`);
+    if (offer.minPurchase != null && offer.minPurchase > 0) lines.push(`Minimum purchase: ${fmtMoneyShort(offer.minPurchase)} (before tax)`);
     lines.push("One-time use");
     if (offer.expiresAt) lines.push(`Valid through ${fmtOfferDate(offer.expiresAt)}`);
     String(offer.details || "").split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => lines.push(l));
@@ -350,7 +350,7 @@ const CustomerView = (function () {
           <div style="padding:0 14px 14px; font-size:13px; color:var(--ink); line-height:1.6;">
             <ol style="margin:0; padding-left:18px;">
               <li>Browse the offers below, and pick one when you're ready to pay</li>
-              <li>Tap <strong>Redeem this offer</strong> — only once you're actually at the counter</li>
+              <li>When you're at the counter, tap <strong>View details</strong>, then <strong>Redeem now</strong></li>
               <li>Show the green <strong>Valid redemption</strong> screen to the cashier</li>
               <li>No app, no login, nothing to install — this page is your pass</li>
             </ol>
