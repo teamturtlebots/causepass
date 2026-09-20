@@ -189,13 +189,12 @@ const CustomerView = (function () {
       const disabled = redeemed || offerExpired || expired || capped || state.pass.status === "disabled";
       return `
         <div class="offer-card ${redeemed ? "redeemed" : ""}">
-          <div class="offer-row">
+          <div class="offer-row ${disabled || redeemed ? "" : "tappable"}" ${disabled || redeemed ? "" : `data-action="confirm-offer" data-offer-id="${offer.id}"`}>
             <div class="offer-left">
               <div class="avatar">${escapeHtml(initials(merchant && merchant.name))}</div>
               <div>
-                <div style="font-weight:700;">${escapeHtml(merchant && merchant.name)}</div>
-                <div style="font-size:13px; color:var(--muted);">${escapeHtml(offer.terms)}</div>
-                ${directionsLinkHtml(merchant)}
+                <div class="offer-merchant">${escapeHtml(merchant && merchant.name)}</div>
+                <div class="offer-savings">${escapeHtml(offer.terms)}</div>
               </div>
             </div>
             <span class="badge ${redeemed ? "grey" : "green"}">${redeemed ? "Redeemed" : "Available"}</span>
@@ -247,23 +246,58 @@ const CustomerView = (function () {
         </div>
       </div>
 
-      ${state.confirmOffer ? `
-        <div class="modal-backdrop">
-          <div class="modal">
-            <div style="font-weight:700; font-size:18px; margin-bottom:8px;">Ready to redeem?</div>
-            <div style="font-size:13px; color:var(--muted); margin-bottom:16px;">
-              Only redeem this offer when you're at the business and ready to pay. This offer can only be used once.
-            </div>
-            <button data-action="cancel-confirm" style="margin-right:8px;">Cancel</button>
-            <button class="primary" data-action="do-redeem">Redeem now</button>
-          </div>
-        </div>
-      ` : ""}
+      ${state.confirmOffer ? renderOfferSheet(state.confirmOffer) : ""}
 
       ${state.liveOffer ? renderLiveValidation() : ""}
     `;
 
     wireEvents();
+  }
+
+  // Money like "$50" or "$5.01" (no needless ".00").
+  function fmtMoneyShort(n) {
+    return "$" + (Number.isInteger(n) ? n : n.toFixed(2));
+  }
+
+  // "2026-12-31" -> "Dec 31, 2026" without timezone shifting the day.
+  function fmtOfferDate(str) {
+    const [y, m, d] = String(str).split("-").map(Number);
+    if (!y || !m || !d) return str;
+    return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  // The fine-print lines for an offer: built from fields the admin already fills in
+  // (minimum purchase, expiry) plus the optional free-text "details" (one line per point).
+  function offerDetailLines(offer) {
+    const lines = [];
+    if (offer.minPurchase != null && offer.minPurchase > 0) lines.push(`Minimum purchase: ${fmtMoneyShort(offer.minPurchase)}`);
+    lines.push("One-time use");
+    if (offer.expiresAt) lines.push(`Valid through ${fmtOfferDate(offer.expiresAt)}`);
+    String(offer.details || "").split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => lines.push(l));
+    return lines;
+  }
+
+  // One pop-up that is both the offer details and the "are you sure?" step, so redeeming
+  // is still two taps: Redeem (on the card) -> Redeem now (here).
+  function renderOfferSheet(offer) {
+    const merchant = state.merchants[offer.merchantId];
+    const lines = offerDetailLines(offer).map((l) => `<li>${escapeHtml(l)}</li>`).join("");
+    const location = directionsLinkHtml(merchant);
+    return `
+      <div class="modal-backdrop">
+        <div class="modal sheet">
+          <div style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;">Ready to redeem?</div>
+          <div style="font-weight:700; font-size:20px; margin-top:6px; line-height:1.25;">${escapeHtml(merchant && merchant.name)}</div>
+          <div class="sheet-savings">${escapeHtml(offer.terms)}</div>
+          <ul class="sheet-lines">${lines}</ul>
+          ${location ? `<div style="margin-top:12px;">${location}</div>` : ""}
+          <div class="sheet-warning">Only redeem this offer when you're at the business and ready to pay. It can only be used once.</div>
+          <div style="display:flex; gap:8px;">
+            <button data-action="cancel-confirm" style="flex:1;">Cancel</button>
+            <button class="primary" data-action="do-redeem" style="flex:2;">Redeem now</button>
+          </div>
+        </div>
+      </div>`;
   }
 
   async function submitSpend(offerId, spendStr) {

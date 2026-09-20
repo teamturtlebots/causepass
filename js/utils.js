@@ -59,13 +59,19 @@ function mapsUrl(address, name) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`;
 }
 
-// Address text plus a small "📍 Directions" button for a merchant, or "" if no address is saved.
-// The button opens the location in Google Maps (or the Maps app on a phone) in a new tab.
-function directionsLinkHtml(merchant) {
+// "📍 Directions" for a merchant, or "" if no address is saved. Opens Google Maps (or the Maps
+// app on a phone) in a new tab.
+//   full (default): the address in gray text plus a small Directions button — used in the offer sheet.
+//   compact = true: just a small text link, no address line — used in tight lists.
+function directionsLinkHtml(merchant, compact) {
   if (!merchant || !merchant.address) return "";
+  const url = escapeHtml(mapsUrl(merchant.address, merchant.name));
+  if (compact) {
+    return `<a href="${url}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:4px; font-size:12px; text-decoration:none;">📍 Directions</a>`;
+  }
   return `
-    <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(merchant.address)}</div>
-    <a href="${escapeHtml(mapsUrl(merchant.address, merchant.name))}" target="_blank" rel="noreferrer" style="text-decoration:none;">
-      <button type="button" style="margin-top:6px; font-size:12px; padding:6px 10px;">📍 Directions</button>
+    <div style="font-size:13px; color:var(--muted); margin-top:2px;">${escapeHtml(merchant.address)}</div>
+    <a href="${url}" target="_blank" rel="noreferrer" style="text-decoration:none;">
+      <button type="button" style="margin-top:8px; font-size:12px; padding:6px 10px;">📍 Directions</button>
     </a>`;
 }

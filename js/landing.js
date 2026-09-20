@@ -53,7 +53,7 @@ const LandingView = (function () {
               <div>
                 <div style="font-weight:700;">${escapeHtml(m && m.name)}</div>
                 <div style="font-size:13px; color:var(--muted);">${escapeHtml(o.terms)}</div>
-                ${directionsLinkHtml(m)}
+                ${directionsLinkHtml(m, true)}
               </div>
             </div>
           </div>
