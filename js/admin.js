@@ -256,21 +256,6 @@ const AdminView = (function () {
     showToast("Pass re-enabled");
   }
 
-  // Permanent. Only offered on disabled passes. Only the pass itself is deleted —
-  // its redemption records are deliberately left alone, because the Firestore rules
-  // keep redemptions permanent outside test campaigns (merchants really did honor them).
-  async function deletePass(token) {
-    const pass = state.passes.find((p) => p.id === token);
-    if (!pass || pass.status !== "disabled") { showToast("Only disabled passes can be deleted"); return; }
-    if (!confirm("Are you sure you want to delete this pass? It will be gone forever.")) return;
-    try {
-      await db.collection("passes").doc(token).delete();
-      showToast("Pass deleted");
-    } catch (e) {
-      showToast("Couldn't delete — try again");
-    }
-  }
-
   async function resetTestPass(passId) {
     const pass = state.passes.find((p) => p.id === passId);
     const program = pass && state.programs.find((pr) => pr.id === pass.programId);
@@ -554,8 +539,7 @@ const AdminView = (function () {
             ${program && program.isTest ? `<button data-action="reset-test-pass" data-id="${p.id}">Reset</button>` : ""}
             ${p.status !== "disabled"
               ? `<button class="danger" data-action="disable-pass" data-token="${p.id}">Disable</button>`
-              : `<button data-action="enable-pass" data-token="${p.id}">Re-enable pass</button>
-                 <button class="danger" data-action="delete-pass" data-token="${p.id}">Delete pass</button>`}
+              : `<button data-action="enable-pass" data-token="${p.id}">Re-enable pass</button>`}
           </div>
         </div>`;
     }).join("");
@@ -794,9 +778,6 @@ const AdminView = (function () {
     });
     app.querySelectorAll('[data-action="enable-pass"]').forEach((el) => {
       el.addEventListener("click", () => enablePass(el.dataset.token));
-    });
-    app.querySelectorAll('[data-action="delete-pass"]').forEach((el) => {
-      el.addEventListener("click", () => deletePass(el.dataset.token));
     });
     app.querySelectorAll('[data-action="copy-link"]').forEach((el) => {
       el.addEventListener("click", async () => {
