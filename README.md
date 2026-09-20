@@ -59,3 +59,12 @@ Admin → Merchants: add a street address when adding or editing a merchant. It 
 "📍 address" link under that business on the landing page and on each customer's pass,
 opening the location in Google Maps (or the Maps app on a phone). It's a plain link — no API
 key, billing, or extra setup. Merchants without an address just don't show the link.
+
+## Offer cards and the offer sheet (pass page)
+
+Pass cards show only the merchant name and the offer headline (the offer's "terms" field —
+keep it short, e.g. "$5 off $50+"). Tapping a card, or its Redeem button, opens one sheet with the
+details and the final "Redeem now" button, so redeeming is still two taps. The sheet lists the
+minimum purchase, "one-time use", the valid-through date, any fine print entered in the offer's
+optional "Fine print" box (Admin → Offers, one point per line), and the merchant's address with a
+Directions button.
