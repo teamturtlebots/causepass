@@ -60,11 +60,21 @@ Admin → Merchants: add a street address when adding or editing a merchant. It 
 opening the location in Google Maps (or the Maps app on a phone). It's a plain link — no API
 key, billing, or extra setup. Merchants without an address just don't show the link.
 
-## Offer cards and the offer sheet (pass page)
+## Offer cards and the terms pop-up (pass page)
 
-Pass cards show only the merchant name and the offer headline (the offer's "terms" field —
-keep it short, e.g. "$5 off $50+"). Tapping a card, or its Redeem button, opens one sheet with the
-details and the final "Redeem now" button, so redeeming is still two taps. The sheet lists the
-minimum purchase, "one-time use", the valid-through date, any fine print entered in the offer's
-optional "Fine print" box (Admin → Offers, one point per line), and the merchant's address with a
-Directions button.
+Each pass card shows the merchant name and offer headline (the offer's "terms" field — keep it
+short, e.g. "$5 off $50+"), the address with a Directions link, and a green **Redeem this offer**
+button. The button opens a **Terms & Conditions** pop-up: minimum purchase (before tax), one-time
+use, valid-through date, any fine print entered in the offer's optional "Fine print" box (Admin →
+Offers, one point per line), and an on-site reminder that redeeming can't be undone. **Redeem now**
+in that pop-up is what actually uses the offer, so redeeming is two taps with a chance to double-check.
+
+## Redemption screen and purchase total (pass page)
+
+After **Redeem now**, the pass shows a full-screen redemption screen built to be read from across
+the counter: the merchant name and offer are huge, with a pulsing LIVE badge and a 5-minute
+countdown as proof it's happening now. It becomes "LIVE WINDOW CLOSED" when the countdown ends, and
+a red "ALREADY REDEEMED / NOT A NEW REDEMPTION" screen if the app finds the offer was already used
+(double-tap, refresh, second phone). The live screen can't be reopened from the pass afterward.
+The optional purchase total is added and edited inline on the redeemed card ("Add purchase
+total" / "Edit"); `firestore.rules` lets a customer change only `amountSpent` on a redemption.
