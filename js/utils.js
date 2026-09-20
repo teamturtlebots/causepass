@@ -75,3 +75,11 @@ function directionsLinkHtml(merchant, compact) {
       <button type="button" style="margin-top:8px; font-size:12px; padding:6px 10px;">📍 Directions</button>
     </a>`;
 }
+
+// Google My Maps: accepts whatever the admin pastes (the full <iframe> embed code, the embed
+// link, or the map's edit/share link) and returns the clean embed URL, or "" if no map ID
+// can be found in it.
+function myMapsEmbedUrl(input) {
+  const m = String(input || "").match(/[?&;]mid=([A-Za-z0-9_-]+)/);
+  return m ? "https://www.google.com/maps/d/embed?mid=" + m[1] : "";
+}

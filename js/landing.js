@@ -35,6 +35,22 @@ const LandingView = (function () {
     return (name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   }
 
+  // "Our network" map: the first live campaign that has a Google My Maps link saved
+  // (Admin -> Programs -> Partner map). Only Google My Maps embed addresses are accepted.
+  function renderNetworkMap() {
+    const program = state.programs.find((p) => !p.isTest && p.mapUrl && p.mapUrl.startsWith("https://www.google.com/maps/d/"));
+    if (!program) return "";
+    return `
+      <div style="margin-top:8px;">
+        <div class="display" style="font-size:17px; text-align:center; margin-bottom:2px;">Our partner network</div>
+        <div style="text-align:center; font-size:12px; color:var(--muted); margin-bottom:10px;">Find participating businesses near you.</div>
+        <div style="border-radius:16px; overflow:hidden; border:1px solid var(--line); box-shadow:0 4px 16px rgba(0,0,0,0.08); height:380px;">
+          <iframe src="${escapeHtml(program.mapUrl)}" title="Map of CausePass partner businesses" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+            style="width:100%; height:100%; border:none; display:block;" allowfullscreen></iframe>
+        </div>
+      </div>`;
+  }
+
   function renderProgramBlock(program) {
     const offers = state.offers.filter((o) => o.programId === program.id);
     const merchantIds = [...new Set(offers.map((o) => o.merchantId))];
@@ -145,6 +161,7 @@ const LandingView = (function () {
               ? liveCampaigns.map(renderProgramBlock).join("")
               : `<div style="text-align:center; font-size:13px; color:var(--muted);">Details coming soon.</div>`;
           })()}
+          ${renderNetworkMap()}
         </div>
 
         <div id="restaurants-section" style="margin-bottom:44px;">

@@ -89,7 +89,7 @@ const AdminView = (function () {
     await db.collection("organizations").add({ name, cause });
     showToast("Organization created");
   }
-  async function createProgram(orgId, name, cap, exp, tagline, zeffyLink, isTest, videoUrl) {
+  async function createProgram(orgId, name, cap, exp, tagline, zeffyLink, isTest, videoUrl, mapUrl) {
     await db.collection("programs").add({
       orgId, name,
       maxRedemptions: cap ? parseInt(cap, 10) : null,
@@ -98,10 +98,11 @@ const AdminView = (function () {
       zeffyLink: zeffyLink || null,
       isTest: !!isTest,
       videoUrl: videoUrl || null,
+      mapUrl: mapUrl || null,
     });
     showToast("Campaign created");
   }
-  async function updateProgram(id, name, cap, exp, tagline, zeffyLink, isTest, videoUrl) {
+  async function updateProgram(id, name, cap, exp, tagline, zeffyLink, isTest, videoUrl, mapUrl) {
     await db.collection("programs").doc(id).update({
       name,
       maxRedemptions: cap ? parseInt(cap, 10) : null,
@@ -110,6 +111,7 @@ const AdminView = (function () {
       zeffyLink: zeffyLink || null,
       isTest: !!isTest,
       videoUrl: videoUrl || null,
+      mapUrl: mapUrl || null,
     });
     state.editingProgramId = null;
     showToast("Campaign updated");
@@ -691,6 +693,8 @@ const AdminView = (function () {
             <br/>
             <input id="edit-program-video-${p.id}" value="${escapeHtml(p.videoUrl || "")}" placeholder="Demo video URL — YouTube (optional)" style="margin-top:8px; width:400px;" />
             <br/>
+            <input id="edit-program-map-${p.id}" value="${escapeHtml(p.mapUrl || "")}" placeholder="Partner map: paste the Google My Maps embed code or link (optional)" style="margin-top:8px; width:400px;" />
+            <br/>
             <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-top:8px;">
               <input type="checkbox" id="edit-program-istest-${p.id}" ${p.isTest ? "checked" : ""} /> Test campaign (hidden from the public landing page)
             </label>
@@ -702,7 +706,7 @@ const AdminView = (function () {
       }
       return `
         <div style="font-size:13px; margin-bottom:6px;">
-          ${p.isTest ? `<span class="badge amber">TEST</span> ` : ""}${escapeHtml(p.name)} — cap: ${p.maxRedemptions ?? "none"} — expires: ${p.expiresAt || "never"}${p.tagline ? ` — "${escapeHtml(p.tagline)}"` : ""}${p.zeffyLink ? ` — <a href="${escapeHtml(p.zeffyLink)}" target="_blank" rel="noreferrer">Zeffy link ✓</a>` : " — no Zeffy link set"}${p.videoUrl ? ` — video ✓` : ""}
+          ${p.isTest ? `<span class="badge amber">TEST</span> ` : ""}${escapeHtml(p.name)} — cap: ${p.maxRedemptions ?? "none"} — expires: ${p.expiresAt || "never"}${p.tagline ? ` — "${escapeHtml(p.tagline)}"` : ""}${p.zeffyLink ? ` — <a href="${escapeHtml(p.zeffyLink)}" target="_blank" rel="noreferrer">Zeffy link ✓</a>` : " — no Zeffy link set"}${p.videoUrl ? ` — video ✓` : ""} ${p.mapUrl ? ` — map ✓` : ""}
           <button data-action="edit-program" data-id="${p.id}">Edit</button>
         </div>`;
     }).join("");
@@ -717,6 +721,8 @@ const AdminView = (function () {
         <input id="program-zeffy" placeholder="Zeffy checkout link (optional)" style="margin-top:8px; width:400px;" />
         <br/>
         <input id="program-video" placeholder="Demo video URL — YouTube (optional)" style="margin-top:8px; width:400px;" />
+        <br/>
+        <input id="program-map" placeholder="Partner map: paste the Google My Maps embed code or link (optional)" style="margin-top:8px; width:400px;" />
         <br/>
         <label style="font-size:13px; display:flex; align-items:center; gap:6px; margin-top:8px;">
           <input type="checkbox" id="program-is-test" /> Test campaign (hidden from the public landing page)
@@ -882,8 +888,11 @@ const AdminView = (function () {
       const tagline = document.getElementById("program-tagline").value.trim();
       const zeffyLink = document.getElementById("program-zeffy").value.trim();
       const videoUrl = document.getElementById("program-video").value.trim();
+      const mapInput = document.getElementById("program-map").value.trim();
+      const mapUrl = mapInput ? myMapsEmbedUrl(mapInput) : "";
+      if (mapInput && !mapUrl) { showToast("Couldn't find a map in that link \u2014 paste the My Maps embed code or link"); return; }
       const isTest = document.getElementById("program-is-test").checked;
-      if (nameInput.value.trim()) { createProgram(createProgramBtn.dataset.org, nameInput.value.trim(), cap, exp, tagline, zeffyLink, isTest, videoUrl); nameInput.value = ""; }
+      if (nameInput.value.trim()) { createProgram(createProgramBtn.dataset.org, nameInput.value.trim(), cap, exp, tagline, zeffyLink, isTest, videoUrl, mapUrl); nameInput.value = ""; }
     });
     app.querySelectorAll('[data-action="edit-program"]').forEach((el) => {
       el.addEventListener("click", () => { state.editingProgramId = el.dataset.id; render(); });
@@ -900,8 +909,11 @@ const AdminView = (function () {
         const tagline = document.getElementById(`edit-program-tagline-${id}`).value.trim();
         const zeffyLink = document.getElementById(`edit-program-zeffy-${id}`).value.trim();
         const videoUrl = document.getElementById(`edit-program-video-${id}`).value.trim();
+        const mapInput = document.getElementById(`edit-program-map-${id}`).value.trim();
+        const mapUrl = mapInput ? myMapsEmbedUrl(mapInput) : "";
+        if (mapInput && !mapUrl) { showToast("Couldn't find a map in that link \u2014 paste the My Maps embed code or link"); return; }
         const isTest = document.getElementById(`edit-program-istest-${id}`).checked;
-        if (name) updateProgram(id, name, cap, exp, tagline, zeffyLink, isTest, videoUrl);
+        if (name) updateProgram(id, name, cap, exp, tagline, zeffyLink, isTest, videoUrl, mapUrl);
       });
     });
   }
