@@ -55,9 +55,17 @@ const LandingView = (function () {
     const offers = state.offers.filter((o) => o.programId === program.id);
     const merchantIds = [...new Set(offers.map((o) => o.merchantId))];
     const org = state.org;
-    // Max possible savings if every offer on this pass got used — same "Save up to
-    // $X" framing as the printed cards, computed live so it's never stale/hand-typed.
-    const potentialSavings = offers.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
+    const cap = program.maxRedemptions;
+    // A pass can only redeem up to `cap` offers total, not every offer on the campaign, so the
+    // realistic "Save up to $X" promise is the CAP highest-value offers, not the sum of all of
+    // them — otherwise this number overstates what a supporter could actually save. Uncapped
+    // campaigns (cap is null) fall back to summing every offer, same as before.
+    const redeemableCount = cap ? Math.min(cap, offers.length) : offers.length;
+    const topSavings = offers
+      .map((o) => o.discountAmount || 0)
+      .sort((a, b) => b - a)
+      .slice(0, redeemableCount)
+      .reduce((sum, v) => sum + v, 0);
 
     const offerCards = offers.map((o) => {
       const m = state.merchants.find((mm) => mm.id === o.merchantId);
@@ -91,7 +99,12 @@ const LandingView = (function () {
           <div style="font-size:14px; color:#E9F0FA; margin-top:6px;">${escapeHtml(program.name)}</div>
           ${program.tagline ? `<div style="font-size:12px; color:#9DBBDD; font-style:italic; margin-top:2px;">${escapeHtml(program.tagline)}</div>` : ""}
           <div style="font-size:12px; color:#9DBBDD; margin-top:10px;">${merchantIds.length} partner business${merchantIds.length === 1 ? "" : "es"} · ${offers.length} active offer${offers.length === 1 ? "" : "s"}</div>
-          ${potentialSavings > 0 ? `<div style="font-size:14px; color:#8FE0AA; font-weight:700; margin-top:4px;">Save up to $${potentialSavings.toFixed(2)}</div>` : ""}
+          ${redeemableCount > 0 ? `
+            <div style="font-size:16px; color:#fff; font-weight:700; margin-top:12px;">One Pass. Choose ${redeemableCount} Offer${redeemableCount === 1 ? "" : "s"}.</div>
+            <div style="font-size:12px; color:#E9F0FA; margin-top:4px; max-width:320px; margin-left:auto; margin-right:auto; line-height:1.5;">
+              Redeem up to ${redeemableCount} offer${redeemableCount === 1 ? "" : "s"} at participating businesses.${topSavings > 0 ? ` Save up to <strong style="color:#8FE0AA;">$${topSavings.toFixed(2)}</strong>.` : ""} Each offer can be used once; minimum spend and other terms apply.
+            </div>
+          ` : ""}
         </div>
 
         <div class="steps-flow" style="margin-bottom:16px;">
