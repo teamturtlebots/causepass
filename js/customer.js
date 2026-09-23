@@ -247,6 +247,10 @@ const CustomerView = (function () {
           ${offersHtml}
 
           ${renderHistorySection()}
+
+          <div style="text-align:center; font-size:12px; color:var(--muted); margin-top:18px;">
+            Questions about your pass? <a href="mailto:causepass@gmail.com?subject=${encodeURIComponent("CausePass" + (state.pass.passNumber ? " \u2014 Pass " + formatPassNumber(state.pass.passNumber) : ""))}">causepass@gmail.com</a>
+          </div>
         </div>
       </div>
 

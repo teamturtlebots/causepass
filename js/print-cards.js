@@ -86,9 +86,18 @@ const PrintCards = (function () {
     doc.text(pass.passNumber ? formatPassNumber(pass.passNumber) : "", cx, cy, { align: "center" });
 
     // Footer branding — text only at this size; a logo icon this small wouldn't read as anything but a smudge.
+    // The email half is a real clickable link (mailto:) when the PDF is viewed on screen, not just printed.
     doc.setTextColor(165, 165, 165);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
-    doc.text("Powered by CausePass", cx, y + CARD_H - 0.1, { align: "center" });
+    const poweredByText = "Powered by CausePass  \u00b7  ";
+    const emailText = "causepass@gmail.com";
+    const poweredByW = doc.getTextWidth(poweredByText);
+    const emailW = doc.getTextWidth(emailText);
+    const footerStartX = cx - (poweredByW + emailW) / 2;
+    const footerY = y + CARD_H - 0.1;
+    doc.text(poweredByText, footerStartX, footerY);
+    doc.textWithLink(emailText, footerStartX + poweredByW, footerY, { url: "mailto:causepass@gmail.com" });
   }
 
   async function generate(org, program, passes, baseUrl, formatPassNumber, onProgress) {

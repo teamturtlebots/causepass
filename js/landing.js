@@ -209,6 +209,7 @@ const LandingView = (function () {
         <div style="text-align:center; font-size:11px; color:var(--muted); border-top:1px solid var(--line); padding-top:16px;">
           <div>Team Turtlebots #66322 · Share the Joy of STEM · teamturtlebots.org</div>
           <div style="margin-top:4px;">Student-led FIRST LEGO League team supported through Georgia Robotics Alliance, Inc., a 501(c)(3) nonprofit</div>
+          <div style="margin-top:10px;">Questions? <a href="mailto:causepass@gmail.com">causepass@gmail.com</a></div>
           <div style="margin-top:10px;"><a href="#/admin">Admin Login</a></div>
         </div>
 
