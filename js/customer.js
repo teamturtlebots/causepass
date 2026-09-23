@@ -228,7 +228,8 @@ const CustomerView = (function () {
             <div style="font-size:11px; color:#9DBBDD; text-transform:uppercase;">Supporting</div>
             <div style="font-size:16px; font-weight:700;">${escapeHtml(state.org && state.org.cause)}</div>
             ${cap ? `
-              <div style="font-size:12px; color:#9DBBDD; margin-top:10px;">${used} of ${cap} offers redeemed</div>
+              <div style="font-size:15px; font-weight:700; margin-top:10px;">Choose ${cap} Offer${cap === 1 ? "" : "s"}</div>
+              <div style="font-size:12px; color:#9DBBDD; margin-top:4px;">${used} of ${cap} offers redeemed</div>
               <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;"></div></div>
             ` : `
               <div style="font-size:12px; color:#9DBBDD; margin-top:10px;">${used} offer${used === 1 ? "" : "s"} redeemed</div>
