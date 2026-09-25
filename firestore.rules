@@ -45,7 +45,13 @@ service cloud.firestore {
     }
 
     match /passes/{passToken} {
-      allow read: if true;
+      // A customer can only ever fetch their own pass by its exact token (get) —
+      // that's what the pass link relies on and stays open, no login required.
+      // Listing/querying the whole collection (list) is different: with no token
+      // in hand it would let anyone pull every pass — including every
+      // customerName — in one query, so that's admin-only.
+      allow get: if true;
+      allow list: if isAdmin();
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || isValidRedemptionIncrement();
     }
